@@ -32,8 +32,15 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/home", request.url));
   }
 
-  // 4. All other cases are allowed
-  return NextResponse.next();
+  // 4. All other cases are allowed, but add cache control to prevent back-button showing stale authenticated content
+  const response = NextResponse.next();
+  
+  // Prevent caching for all routes handled by proxy (except maybe static ones which are skipped at the top)
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  
+  return response;
 }
 
 export const config = {

@@ -41,9 +41,11 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, initialFriendStatus = "NONE", currentUserId }: ProfileHeaderProps) {
   const router = useRouter();
-  const displayName = user.name || user.username || "User";
-  const username = user.username || user.id;
-  const initials = displayName[0].toUpperCase();
+  const rawUsername = user.username || user.id || "";
+  const shortUsername = rawUsername.length > 3 ? rawUsername.substring(0, 3) : rawUsername;
+  const displayName = user.name || "User";
+  const formattedHandle = `@${displayName.replace(/\s+/g, '')}${shortUsername}`;
+  const initials = (user.name?.[0] || rawUsername[0] || "U").toUpperCase();
 
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [friendStatus, setFriendStatus] = useState<FriendStatus>(initialFriendStatus);
@@ -275,7 +277,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
 
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-white lg:text-3xl">{displayName}</h1>
-          <p className="text-zinc-500">@{username}</p>
+          <p className="text-zinc-500">{formattedHandle}</p>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-zinc-500">

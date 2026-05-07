@@ -36,8 +36,11 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
   const router = useRouter();
 
   const { data: session } = authClient.useSession();
-  const displayName = post.author.name || post.author.username || "Unknown User";
-  const initials = post.author.name?.[0] || post.author.username?.[0] || "?";
+  const rawUsername = post.author.username || post.authorId || "";
+  const shortUsername = rawUsername.length > 3 ? rawUsername.substring(0, 3) : rawUsername;
+  const name = post.author.name || "User";
+  const formattedHandle = `@${name.replace(/\s+/g, '')}${shortUsername}`;
+  const initials = (post.author.name?.[0] || rawUsername[0] || "U").toUpperCase();
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this post?")) return;
@@ -72,7 +75,7 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
         {/* Avatar */}
         <Link href={`/Profile/${post.author.username || post.authorId}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 font-bold text-emerald-400 uppercase hover:opacity-80 transition overflow-hidden">
           {post.author.image ? (
-            <img src={post.author.image} alt={displayName} className="h-full w-full object-cover" />
+            <img src={post.author.image} alt={name} className="h-full w-full object-cover" />
           ) : (
             initials
           )}
@@ -83,9 +86,11 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
             <div className="flex flex-col">
               <div className="flex items-center gap-1">
                 <Link href={`/Profile/${post.author.username || post.authorId}`} className="font-bold text-white hover:underline text-sm sm:text-base">
-                  {displayName}
+                  {name}
                 </Link>
-                <span className="text-zinc-500 text-xs sm:text-sm">@{post.author.username || "user"}</span>
+                <span className="text-zinc-500 text-xs">
+                  {formattedHandle}
+                </span>
                 <span className="text-zinc-500 text-xs sm:text-sm">·</span>
                 <span className="text-zinc-500 text-xs sm:text-sm" suppressHydrationWarning>
                   {new Date(post.createdAt).toLocaleDateString()}

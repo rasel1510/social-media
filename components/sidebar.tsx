@@ -160,8 +160,9 @@ export function Sidebar() {
                   )}
                 </div>
                 <div className="overflow-hidden">
-                  <h3 className="text-sm font-bold truncate">{session.user.name}</h3>
-                  <p className="text-xs text-zinc-400 truncate">@{user?.username || session.user.email.split('@')[0]}</p>
+                  <h3 className="text-sm font-bold truncate">
+                    {session.user.name} ({ (user?.username || session.user.email.split('@')[0]).substring(0, 3) })
+                  </h3>
                 </div>
               </div>
 
