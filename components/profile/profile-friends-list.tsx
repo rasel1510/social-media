@@ -141,3 +141,6 @@ export function ProfileFriendsList({ userId, currentUserId }: ProfileFriendsList
     </div>
   );
 }
+
+
+

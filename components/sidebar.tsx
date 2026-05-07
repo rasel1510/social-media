@@ -64,11 +64,25 @@ export function Sidebar() {
     }
   }, [session?.user?.id]);
 
+  // Facebook-style security: Prevent back-button from showing cached authenticated content after logout
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        // If the page was loaded from the back/forward cache, refresh it
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const handleLogout = async () => {
     await authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          router.push("/login");
+          // Force a full page reload to clear all states and prevent 'back' button cache issues
+          window.location.replace("/login");
         },
       },
     });
