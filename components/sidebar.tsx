@@ -82,14 +82,14 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:col-span-3 lg:flex lg:flex-col lg:justify-between lg:border-r lg:border-zinc-800 lg:px-5 lg:py-5 h-full">
       <div>
-        <Link href="/" className="mb-8 flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500 text-emerald-400">
+        <Link href="/home" className="mb-8 flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500 text-emerald-400">
           <Terminal className="h-5 w-5" />
         </Link>
 
         <nav className="space-y-1">
           <Link
-            href="/"
-            className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/" ? "text-emerald-400" : "text-white"}`}
+            href="/home"
+            className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/home" ? "text-emerald-400" : "text-white"}`}
           >
             <HomeIcon className="h-6 w-6" />
             Home
