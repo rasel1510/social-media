@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Calendar, Camera, ArrowLeft, Loader2 } from "lucide-react";
+import { Calendar, Camera, ArrowLeft, Loader2, MapPin, Briefcase, GraduationCap } from "lucide-react";
+import { EditProfileModal } from "./edit-profile-modal";
 import type { User } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { followUser, unfollowUser } from "@/app/actions/follow";
@@ -21,6 +22,10 @@ interface UserWithCount {
   username: string | null;
   image: string | null;
   coverImage: string | null;
+  bio: string | null;
+  study: string | null;
+  work: string | null;
+  address: string | null;
   createdAt: Date | string;
   _count?: {
     posts?: number;
@@ -52,6 +57,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
   const [isPending, startTransition] = useTransition();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"followers" | "following" | "friends">("followers");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const openModal = (type: "followers" | "following" | "friends") => {
     setModalType(type);
@@ -237,7 +243,10 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
 
           <div className="mb-2 flex gap-2">
             {isOwnProfile ? (
-              <button className="rounded-full border border-zinc-700 px-6 py-2 text-sm font-bold transition hover:bg-zinc-900">
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="rounded-full border border-zinc-700 px-6 py-2 text-sm font-bold transition hover:bg-zinc-900"
+              >
                 Edit Profile
               </button>
             ) : (
@@ -278,12 +287,35 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
           <p className="text-zinc-500">{formattedHandle}</p>
         </div>
 
+        {user.bio && (
+          <p className="mt-3 text-white text-[15px] leading-relaxed max-w-xl">
+            {user.bio}
+          </p>
+        )}
+
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-zinc-500">
+          {user.address && (
+            <div className="flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              {user.address}
+            </div>
+          )}
+          {user.work && (
+            <div className="flex items-center gap-1">
+              <Briefcase className="h-4 w-4" />
+              {user.work}
+            </div>
+          )}
+          {user.study && (
+            <div className="flex items-center gap-1">
+              <GraduationCap className="h-4 w-4" />
+              {user.study}
+            </div>
+          )}
           <div className="flex items-center gap-1">
             <Calendar className="h-4 w-4" />
             Joined {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
           </div>
-          {/* Add placeholders for location/website if needed */}
         </div>
 
         <div className="mt-4 flex gap-6">
@@ -369,6 +401,12 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
           </div>
         </DialogContent>
       </Dialog>
+
+      <EditProfileModal 
+        user={user} 
+        open={isEditModalOpen} 
+        onOpenChange={setIsEditModalOpen} 
+      />
     </div>
   );
 }
