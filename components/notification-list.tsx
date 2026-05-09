@@ -12,6 +12,7 @@ interface NotificationListProps {
   initialNotifications: any[];
 }
 
+
 function FriendRequestItem({ notification, onActionComplete }: { notification: any, onActionComplete: () => void }) {
   const [isPending, startTransition] = useTransition();
   const [actionTaken, setActionTaken] = useState<"accepted" | "rejected" | null>(null);
@@ -78,9 +79,15 @@ export function NotificationList({ initialNotifications }: NotificationListProps
     markAsRead();
   }, []);
 
+  const allNotifications = notifications.filter((n) => n.type !== "MENTION");
+  const mentionNotifications = notifications.filter((n) => n.type === "MENTION");
+
   const filteredNotifications = activeTab === "mentions"
-    ? notifications.filter((n) => n.type === "MENTION")
-    : notifications;
+    ? mentionNotifications
+    : allNotifications;
+
+  const hasUnreadAll = allNotifications.some((n) => !n.isRead);
+  const hasUnreadMentions = mentionNotifications.some((n) => !n.isRead);
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -94,14 +101,14 @@ export function NotificationList({ initialNotifications }: NotificationListProps
     }
   };
 
-  const getMessage = (type: string) => {
-    switch (type) {
+  const getMessage = (notification: any) => {
+    switch (notification.type) {
       case "LIKE": return "liked your post";
       case "COMMENT": return "commented on your post";
       case "REPLY": return "replied to your comment";
       case "SHARE": return "shared your post";
       case "FRIEND_REQUEST": return "sent you a friend request";
-      case "MENTION": return "mentioned you";
+      case "MENTION": return notification.commentId ? "mentioned you in a comment" : "mentioned you in a post";
       default: return "interacted with you";
     }
   };
@@ -116,22 +123,24 @@ export function NotificationList({ initialNotifications }: NotificationListProps
         <div className="flex mt-3">
           <button
             onClick={() => setActiveTab("all")}
-            className={`flex-1 relative py-3 text-sm font-bold transition-colors hover:bg-zinc-900/60 ${
-              activeTab === "all" ? "text-white" : "text-zinc-500"
-            }`}
+            className={`flex-1 relative py-3 text-sm font-bold transition-colors hover:bg-zinc-900/60 ${activeTab === "all" ? "text-white" : "text-zinc-500"}`}
           >
-            All
+            <span className="inline-flex items-center gap-1.5">
+              All
+              {hasUnreadAll && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+            </span>
             {activeTab === "all" && (
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-12 rounded-full bg-emerald-500" />
             )}
           </button>
           <button
             onClick={() => setActiveTab("mentions")}
-            className={`flex-1 relative py-3 text-sm font-bold transition-colors hover:bg-zinc-900/60 ${
-              activeTab === "mentions" ? "text-white" : "text-zinc-500"
-            }`}
+            className={`flex-1 relative py-3 text-sm font-bold transition-colors hover:bg-zinc-900/60 ${activeTab === "mentions" ? "text-white" : "text-zinc-500"}`}
           >
-            Mentions
+            <span className="inline-flex items-center gap-1.5">
+              Mentions
+              {hasUnreadMentions && <span className="h-2 w-2 rounded-full bg-purple-500" />}
+            </span>
             {activeTab === "mentions" && (
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-16 rounded-full bg-emerald-500" />
             )}
@@ -163,12 +172,12 @@ export function NotificationList({ initialNotifications }: NotificationListProps
         <div className="divide-y divide-zinc-800">
           {filteredNotifications.map((notification) => {
             const content = (
-              <div 
+              <div
                 className={`flex gap-3 p-4 hover:bg-zinc-900/50 transition cursor-pointer group ${!notification.isRead ? 'bg-emerald-500/5' : ''}`}
               >
                 {/* Actor Avatar */}
-                <Link 
-                  href={`/Profile/${notification.actor.username || notification.actorId}`} 
+                <Link
+                  href={`/Profile/${notification.actor.username || notification.actorId}`}
                   className="shrink-0 pt-1 z-10"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -192,7 +201,7 @@ export function NotificationList({ initialNotifications }: NotificationListProps
                           <span className="font-bold text-white group-hover:underline">
                             {notification.actor.name || notification.actor.username}
                           </span>{" "}
-                          {getMessage(notification.type)}
+                          {getMessage(notification)}
                         </p>
                       </div>
 
@@ -207,15 +216,15 @@ export function NotificationList({ initialNotifications }: NotificationListProps
                       </span>
 
                       {notification.type === "FRIEND_REQUEST" && (
-                        <FriendRequestItem 
-                          notification={notification} 
+                        <FriendRequestItem
+                          notification={notification}
                           onActionComplete={() => {
                             // Optional: remove notification from list or leave it as "accepted"
-                          }} 
+                          }}
                         />
                       )}
                     </div>
-                    
+
                     {!notification.isRead && (
                       <div className="h-2 w-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                     )}
@@ -230,9 +239,7 @@ export function NotificationList({ initialNotifications }: NotificationListProps
                 return;
               }
               if (notification.postId) {
-                const action = (notification.type === "COMMENT" || notification.type === "REPLY") ? "comment" : "";
-                const href = `/Post/${notification.postId}${action ? `?action=${action}` : ""}`;
-                router.push(href);
+                router.push(`/Post/${notification.postId}`);
               }
             };
 
@@ -247,3 +254,10 @@ export function NotificationList({ initialNotifications }: NotificationListProps
     </div>
   );
 }
+
+
+
+
+
+
+
