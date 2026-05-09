@@ -150,7 +150,13 @@ export async function getMessages(conversationId: string, limit = 50) {
           include: {
             author: { select: { id: true, name: true, image: true, username: true } }
           }
-        }
+        },
+        replyTo: {
+          include: {
+            sender: { select: { name: true } }
+          }
+        },
+        reactions: true
       },
       orderBy: { createdAt: "asc" },
       take: limit,
@@ -164,7 +170,7 @@ export async function getMessages(conversationId: string, limit = 50) {
 }
 
 // 4. Send a message
-export async function sendMessage(conversationId: string, content: string, audioUrl?: string, imageUrl?: string) {
+export async function sendMessage(conversationId: string, content: string, audioUrl?: string, imageUrl?: string, replyToId?: string, isForwarded?: boolean) {
   try {
     const session = await getSession();
     if (!session) throw new Error("Unauthorized");
@@ -210,11 +216,14 @@ export async function sendMessage(conversationId: string, content: string, audio
           content,
           audioUrl,
           imageUrl,
+          replyToId,
+          isForwarded: isForwarded || false,
           senderId: currentUserId,
           conversationId,
         },
         include: {
-          sender: { select: { id: true, name: true, image: true, username: true } }
+          sender: { select: { id: true, name: true, image: true, username: true } },
+          replyTo: { select: { id: true, content: true, sender: { select: { name: true } } } }
         }
       }),
       prisma.conversation.update({
@@ -229,7 +238,7 @@ export async function sendMessage(conversationId: string, content: string, audio
     // Side effects: Firebase push and Revalidation
     // We wrap these to ensure they don't block each other if one fails
     const sideEffects = [
-      adminDb.ref(`messages/${conversationId}`).push({
+      adminDb.ref(`messages/${conversationId}/${message.id}`).set({
         ...message,
         createdAt: message.createdAt.toISOString(),
       }).catch(e => console.error("Firebase push error:", e)),
@@ -361,7 +370,7 @@ export async function sendPostInMessage(postId: string, friendId: string) {
 
     // Push to Firebase for real-time update
     try {
-      await adminDb.ref(`messages/${conversationId}`).push({
+      await adminDb.ref(`messages/${conversationId}/${message.id}`).set({
         ...message,
         createdAt: message.createdAt.toISOString(),
       });
@@ -376,3 +385,118 @@ export async function sendPostInMessage(postId: string, friendId: string) {
     return { success: false, error: error.message || "Failed to share post" };
   }
 }
+
+// 8. Edit a message
+export async function editMessage(messageId: string, newContent: string) {
+  try {
+    const session = await getSession();
+    if (!session) throw new Error("Unauthorized");
+
+    const currentUserId = session.user.id;
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { senderId: true, conversationId: true },
+    });
+
+    if (!message || message.senderId !== currentUserId) {
+      throw new Error("Cannot edit this message");
+    }
+
+    const updatedMsg = await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        content: newContent,
+        isEdited: true,
+      },
+      include: {
+        sender: { select: { id: true, name: true, image: true, username: true } },
+        replyTo: { select: { id: true, content: true, sender: { select: { name: true } } } },
+        reactions: true
+      }
+    });
+
+    // Notify via Firebase
+    try {
+      await adminDb.ref(`messages/${message.conversationId}/${messageId}`).set({
+        ...updatedMsg,
+        createdAt: updatedMsg.createdAt.toISOString(),
+      });
+    } catch (e) {
+      console.error("Firebase update error", e);
+    }
+
+    revalidatePath(`/Messages`);
+    return { success: true, message: updatedMsg };
+  } catch (error: any) {
+    console.error("Error editing message:", error);
+    return { success: false, error: error.message || "Failed to edit message" };
+  }
+}
+
+// 9. React to a message
+export async function reactToMessage(messageId: string, emoji: string) {
+  try {
+    const session = await getSession();
+    if (!session) throw new Error("Unauthorized");
+
+    const currentUserId = session.user.id;
+
+    // Check if message exists and user is in conversation
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { conversation: true },
+    });
+
+    if (!message) throw new Error("Message not found");
+    const { conversation } = message;
+    if (conversation.user1Id !== currentUserId && conversation.user2Id !== currentUserId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Upsert reaction
+    const reaction = await prisma.messageReaction.upsert({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId: currentUserId,
+        }
+      },
+      update: { emoji },
+      create: {
+        messageId,
+        userId: currentUserId,
+        emoji
+      }
+    });
+
+    // Fetch the full updated message to broadcast
+    const updatedMsg = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        sender: { select: { id: true, name: true, image: true, username: true } },
+        replyTo: { select: { id: true, content: true, sender: { select: { name: true } } } },
+        reactions: true
+      }
+    });
+
+    // Notify via Firebase
+    if (updatedMsg) {
+      try {
+        await adminDb.ref(`messages/${message.conversationId}/${messageId}`).set({
+          ...updatedMsg,
+          createdAt: updatedMsg.createdAt.toISOString(),
+        });
+      } catch (e) {
+        console.error("Firebase update error", e);
+      }
+    }
+
+    revalidatePath(`/Messages`);
+    return { success: true, reaction };
+  } catch (error: any) {
+    console.error("Error reacting to message:", error);
+    return { success: false, error: error.message || "Failed to add reaction" };
+  }
+}
+

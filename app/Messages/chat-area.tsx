@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MessageInput } from "./message-input";
-import { getMessages, markAsRead } from "@/app/actions/message";
-import { Loader2, Info, X, Mic } from "lucide-react";
+import { getMessages, markAsRead, reactToMessage } from "@/app/actions/message";
+import { Loader2, Info, X, Mic, MoreVertical, Copy, Reply as ReplyIcon, Edit2, Forward, SmilePlus } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { db } from "@/lib/firebase";
-import { ref, onChildAdded } from "firebase/database";
+import { ref, onChildAdded, onChildChanged } from "firebase/database";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 interface ChatAreaProps {
   conversationId: string;
@@ -22,11 +24,17 @@ interface ChatAreaProps {
   onClose?: () => void;
 }
 
+const EMOJI_LIST = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
 export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAdded, onClose }: ChatAreaProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [lastMessageId, setLastMessageId] = useState<string | null>(null);
+  
+  // State for advanced features
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [editingMessage, setEditingMessage] = useState<any>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<any>(null);
 
   // Fetch initial messages
   useEffect(() => {
@@ -37,9 +45,6 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
       const data = await getMessages(conversationId);
       if (isMounted) {
         setMessages(data);
-        if (data.length > 0) {
-          setLastMessageId(data[data.length - 1].id);
-        }
         setIsLoading(false);
         markAsRead(conversationId);
       }
@@ -55,32 +60,52 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Real-time listener for new messages via Firebase
+  // Real-time listener for new messages and edits via Firebase
   useEffect(() => {
     if (!conversationId) return;
 
     const messagesRef = ref(db, `messages/${conversationId}`);
     
-    // Listen for new messages
-    const unsubscribe = onChildAdded(messagesRef, (snapshot) => {
+    const unsubscribeAdded = onChildAdded(messagesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // We convert string date back to Date object if needed, 
-        // though chat-area seems to handle string dates fine via new Date()
-        handleNewMessage(data);
+        handleIncomingMessage(data);
       }
     });
 
-    return () => unsubscribe();
+    const unsubscribeChanged = onChildChanged(messagesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        handleIncomingMessage(data);
+      }
+    });
+
+    return () => {
+      unsubscribeAdded();
+      unsubscribeChanged();
+    };
   }, [conversationId]);
 
-  const handleNewMessage = (newMessage: any) => {
+  const handleIncomingMessage = (newMessage: any) => {
     setMessages(prev => {
-      if (prev.some(p => p.id === newMessage.id)) return prev;
+      const existsIndex = prev.findIndex(p => p.id === newMessage.id);
+      if (existsIndex >= 0) {
+        const newArray = [...prev];
+        newArray[existsIndex] = newMessage;
+        return newArray;
+      }
       return [...prev, newMessage];
     });
-    setLastMessageId(newMessage.id);
     onMessageAdded(newMessage);
+  };
+
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content);
+  };
+
+  const handleReact = async (messageId: string, emoji: string) => {
+    // Optimistic update could go here, but Firebase is fast
+    await reactToMessage(messageId, emoji);
   };
 
   return (
@@ -161,7 +186,43 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
                       {format(msgDate, "MMM d, h:mm a")}
                     </div>
                   )}
-                  <div className={`flex gap-2 max-w-[75%] ${isMe ? "self-end" : "self-start"}`}>
+                  
+                  <div className={`flex gap-2 max-w-[85%] ${isMe ? "self-end" : "self-start"} group relative`}>
+                    
+                    {/* Left Actions (if it's me) */}
+                    {isMe && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0 pr-1 gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition">
+                            <MoreVertical className="w-4 h-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[150px]">
+                            <div className="flex items-center justify-between p-2 pb-1 border-b border-zinc-800 mb-1">
+                              {EMOJI_LIST.map(emoji => (
+                                <button key={emoji} onClick={() => handleReact(msg.id, emoji)} className="hover:scale-125 transition-transform text-lg">{emoji}</button>
+                              ))}
+                            </div>
+                            <DropdownMenuItem onClick={() => setReplyingTo(msg)} className="cursor-pointer">
+                              <ReplyIcon className="w-4 h-4 mr-2" /> Reply
+                            </DropdownMenuItem>
+                            {msg.content && (
+                              <DropdownMenuItem onClick={() => setEditingMessage(msg)} className="cursor-pointer">
+                                <Edit2 className="w-4 h-4 mr-2" /> Edit
+                              </DropdownMenuItem>
+                            )}
+                            {msg.content && (
+                              <DropdownMenuItem onClick={() => handleCopy(msg.content)} className="cursor-pointer">
+                                <Copy className="w-4 h-4 mr-2" /> Copy
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => setForwardingMessage(msg)} className="cursor-pointer">
+                              <Forward className="w-4 h-4 mr-2" /> Forward
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    )}
+
                     {!isMe && (
                       <div className="w-8 shrink-0 flex items-end pb-1">
                         {showAvatar && (
@@ -178,85 +239,146 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
                       </div>
                     )}
                     
-                    <div
-                      className={`px-4 py-2.5 rounded-2xl whitespace-pre-wrap break-words flex flex-col gap-2 ${
-                        isMe 
-                          ? "bg-emerald-500 text-black rounded-br-sm" 
-                          : "bg-zinc-800 text-white rounded-bl-sm"
-                      }`}
-                    >
-                      {msg.postId && msg.post && (
-                        <div className={`mb-1 p-3 rounded-xl border flex flex-col gap-2 ${
-                          isMe ? "bg-emerald-600/20 border-emerald-400/30" : "bg-black/20 border-zinc-700"
-                        }`}>
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-zinc-800 overflow-hidden shrink-0 border border-white/10">
-                              {msg.post.author.image ? (
-                                <img src={msg.post.author.image} alt="" className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-emerald-400">
-                                  {msg.post.author.name?.[0]?.toUpperCase()}
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-xs font-bold truncate">{msg.post.author.name}</span>
+                    <div className="flex flex-col relative">
+                      <div
+                        className={`px-4 py-2.5 rounded-2xl whitespace-pre-wrap break-words flex flex-col gap-2 relative ${
+                          isMe 
+                            ? "bg-emerald-500 text-black rounded-br-sm" 
+                            : "bg-zinc-800 text-white rounded-bl-sm"
+                        }`}
+                      >
+                        {msg.isForwarded && (
+                          <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider opacity-70 mb-1 italic">
+                            <Forward className="w-3 h-3" /> Forwarded
                           </div>
-                          
-                          {msg.post.content && (
-                            <p className="text-xs line-clamp-3 opacity-90 italic">
-                              {msg.post.content}
-                            </p>
-                          )}
-                          
-                          {msg.post.image && (
-                            <div className="rounded-lg overflow-hidden border border-white/5 max-h-32">
-                              <img src={msg.post.image} alt="" className="w-full h-full object-cover" />
-                            </div>
-                          )}
+                        )}
 
-                          <Link 
-                            href={`/Post/${msg.postId}`}
-                            className={`text-[10px] font-bold uppercase tracking-wider py-1 px-2 rounded-md self-start transition ${
-                              isMe ? "bg-emerald-400 text-black hover:bg-white" : "bg-zinc-700 text-white hover:bg-emerald-500 hover:text-black"
-                            }`}
-                          >
-                            View Post
-                          </Link>
-                        </div>
-                      )}
-                      {msg.audioUrl && (
-                        <div className={`mb-2 p-2 rounded-xl flex items-center gap-3 min-w-[200px] ${
-                          isMe ? "bg-emerald-600/30" : "bg-black/40"
-                        }`}>
-                          <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                            isMe ? "bg-emerald-400 text-black" : "bg-emerald-500 text-black"
+                        {/* Reply Preview */}
+                        {msg.replyTo && (
+                          <div className={`text-xs p-2 rounded-lg border-l-4 mb-1 ${
+                            isMe ? "bg-black/10 border-black/30 text-black/80" : "bg-black/20 border-emerald-500 text-zinc-300"
                           }`}>
-                            <Mic className="w-5 h-5" />
+                            <div className="font-bold opacity-80 mb-0.5">{msg.replyTo.sender?.name}</div>
+                            <div className="truncate opacity-75">{msg.replyTo.content || "Attachment"}</div>
                           </div>
-                          <div className="flex-1">
-                            <audio 
-                              src={msg.audioUrl} 
-                              controls 
-                              className={`h-8 w-full max-w-[240px] custom-audio-player ${
-                                isMe ? "brightness-110 contrast-125" : ""
+                        )}
+
+                        {msg.postId && msg.post && (
+                          <div className={`mb-1 p-3 rounded-xl border flex flex-col gap-2 ${
+                            isMe ? "bg-emerald-600/20 border-emerald-400/30" : "bg-black/20 border-zinc-700"
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <div className="h-6 w-6 rounded-full bg-zinc-800 overflow-hidden shrink-0 border border-white/10">
+                                {msg.post.author?.image ? (
+                                  <img src={msg.post.author.image} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-emerald-400">
+                                    {msg.post.author?.name?.[0]?.toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-xs font-bold truncate">{msg.post.author?.name}</span>
+                            </div>
+                            
+                            {msg.post.content && (
+                              <p className="text-xs line-clamp-3 opacity-90 italic">
+                                {msg.post.content}
+                              </p>
+                            )}
+                            
+                            {msg.post.image && (
+                              <div className="rounded-lg overflow-hidden border border-white/5 max-h-32">
+                                <img src={msg.post.image} alt="" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+
+                            <Link 
+                              href={`/Post/${msg.postId}`}
+                              className={`text-[10px] font-bold uppercase tracking-wider py-1 px-2 rounded-md self-start transition ${
+                                isMe ? "bg-emerald-400 text-black hover:bg-white" : "bg-zinc-700 text-white hover:bg-emerald-500 hover:text-black"
                               }`}
-                            />
+                            >
+                              View Post
+                            </Link>
                           </div>
+                        )}
+                        {msg.audioUrl && (
+                          <div className={`mb-2 p-2 rounded-xl flex items-center gap-3 min-w-[200px] ${
+                            isMe ? "bg-emerald-600/30" : "bg-black/40"
+                          }`}>
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+                              isMe ? "bg-emerald-400 text-black" : "bg-emerald-500 text-black"
+                            }`}>
+                              <Mic className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1">
+                              <audio 
+                                src={msg.audioUrl} 
+                                controls 
+                                className={`h-8 w-full max-w-[240px] custom-audio-player ${
+                                  isMe ? "brightness-110 contrast-125" : ""
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        
+                        {msg.imageUrl && (
+                          <div className="mb-2 max-w-[240px] sm:max-w-[300px] rounded-xl overflow-hidden border border-white/10 bg-black/20">
+                            <img src={msg.imageUrl} alt="Shared image" className="w-full h-auto object-cover" />
+                          </div>
+                        )}
+                        
+                        {msg.content && <span>{msg.content}</span>}
+
+                        {msg.isEdited && (
+                          <span className="text-[10px] opacity-60 self-end -mt-1 italic">(edited)</span>
+                        )}
+                      </div>
+
+                      {/* Reactions Display */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className={`absolute -bottom-3 ${isMe ? "right-2" : "left-2"} flex items-center bg-zinc-800 border border-zinc-700 rounded-full px-1.5 py-0.5 text-xs shadow-md z-10`}>
+                          {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).slice(0, 3).map((emoji: any, i) => (
+                            <span key={i} className="mx-0.5">{emoji}</span>
+                          ))}
+                          {msg.reactions.length > 1 && <span className="text-zinc-300 ml-1 font-bold text-[10px]">{msg.reactions.length}</span>}
                         </div>
                       )}
-                      
-                      {msg.imageUrl && (
-                        <div className="mb-2 max-w-[240px] sm:max-w-[300px] rounded-xl overflow-hidden border border-white/10 bg-black/20">
-                          <img src={msg.imageUrl} alt="Shared image" className="w-full h-auto object-cover" />
-                        </div>
-                      )}
-                      
-                      {msg.content && <span>{msg.content}</span>}
                     </div>
+
+                    {/* Right Actions (if it's them) */}
+                    {!isMe && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0 pl-1 gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition">
+                            <MoreVertical className="w-4 h-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[150px]">
+                            <div className="flex items-center justify-between p-2 pb-1 border-b border-zinc-800 mb-1">
+                              {EMOJI_LIST.map(emoji => (
+                                <button key={emoji} onClick={() => handleReact(msg.id, emoji)} className="hover:scale-125 transition-transform text-lg">{emoji}</button>
+                              ))}
+                            </div>
+                            <DropdownMenuItem onClick={() => setReplyingTo(msg)} className="cursor-pointer">
+                              <ReplyIcon className="w-4 h-4 mr-2" /> Reply
+                            </DropdownMenuItem>
+                            {msg.content && (
+                              <DropdownMenuItem onClick={() => handleCopy(msg.content)} className="cursor-pointer">
+                                <Copy className="w-4 h-4 mr-2" /> Copy
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => setForwardingMessage(msg)} className="cursor-pointer">
+                              <Forward className="w-4 h-4 mr-2" /> Forward
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    )}
                   </div>
                   
                   {isMe && index === messages.length - 1 && msg.isRead && (
-                    <div className="text-xs text-zinc-500 self-end mt-1 mr-2">Seen</div>
+                    <div className="text-xs text-zinc-500 self-end mt-2 mr-2">Seen</div>
                   )}
                 </div>
               );
@@ -267,7 +389,42 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
       </div>
 
       {/* Input */}
-      <MessageInput conversationId={conversationId} onMessageSent={handleNewMessage} />
+      <MessageInput 
+        conversationId={conversationId} 
+        onMessageSent={handleIncomingMessage}
+        replyingTo={replyingTo}
+        onCancelReply={() => setReplyingTo(null)}
+        editingMessage={editingMessage}
+        onCancelEdit={() => setEditingMessage(null)}
+      />
+
+      {/* Forward Modal - we just show an alert for now if we don't have the friend selector ready,
+          or we can quickly scaffold a very simple modal. Given constraints, I'll log or toast. */}
+      {forwardingMessage && (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 relative">
+            <button onClick={() => setForwardingMessage(null)} className="absolute top-4 right-4 text-zinc-500 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-xl font-bold text-white mb-4">Forward Message</h3>
+            <p className="text-sm text-zinc-400 mb-6">Select a conversation to forward this message to.</p>
+            
+            {/* Minimalist Forward Placeholder. For a full implementation, you would list friend conversations here. */}
+            <div className="p-4 border border-zinc-800 rounded-xl text-center text-zinc-500 text-sm">
+              <p>In a complete system, your friends list would appear here.</p>
+              <button 
+                className="mt-4 w-full py-2 bg-emerald-500 text-black font-bold rounded-lg"
+                onClick={() => {
+                  toast.success("Forwarded successfully (Demo)");
+                  setForwardingMessage(null);
+                }}
+              >
+                Forward to Recent
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

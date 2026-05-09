@@ -1,18 +1,29 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Smile, Loader2, Mic, StopCircle, Trash2, ImageIcon, X } from "lucide-react";
+import { Send, Smile, Loader2, Mic, StopCircle, Trash2, ImageIcon, X, Reply, Edit2 } from "lucide-react";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
-import { sendMessage } from "@/app/actions/message";
+import { sendMessage, editMessage } from "@/app/actions/message";
 import { uploadFiles } from "@/lib/uploadthing";
 import { toast } from "sonner";
 
 interface MessageInputProps {
   conversationId: string;
   onMessageSent: (message: any) => void;
+  replyingTo?: any;
+  onCancelReply?: () => void;
+  editingMessage?: any;
+  onCancelEdit?: () => void;
 }
 
-export function MessageInput({ conversationId, onMessageSent }: MessageInputProps) {
+export function MessageInput({ 
+  conversationId, 
+  onMessageSent,
+  replyingTo,
+  onCancelReply,
+  editingMessage,
+  onCancelEdit
+}: MessageInputProps) {
   const [content, setContent] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -29,6 +40,19 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    if (editingMessage) {
+      setContent(editingMessage.content || "");
+      if (inputRef.current) inputRef.current.focus();
+    } else {
+      if (!replyingTo) {
+        setContent("");
+      } else {
+        if (inputRef.current) inputRef.current.focus();
+      }
+    }
+  }, [editingMessage, replyingTo]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -121,41 +145,57 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
     if ((!content.trim() && !audioBlob && !imageFile) || isSending || isUploading) return;
 
     setIsSending(true);
-    let currentAudioUrl = undefined;
-    let currentImageUrl = undefined;
 
     try {
-      if (audioBlob) {
-        setIsUploading(true);
-        const file = new File([audioBlob], "audio_message.webm", { type: "audio/webm" });
-        const uploadRes = await uploadFiles("audioUploader", {
-          files: [file],
-        });
-        currentAudioUrl = uploadRes[0].url;
-      }
-
-      if (imageFile) {
-        setIsUploading(true);
-        const uploadRes = await uploadFiles("imageUploader", {
-          files: [imageFile],
-        });
-        currentImageUrl = uploadRes[0].url;
-      }
-
-      const result = await sendMessage(conversationId, content, currentAudioUrl, currentImageUrl);
-      
-      if (result.success) {
-        setContent("");
-        setAudioBlob(null);
-        setRecordingTime(0);
-        cancelImage();
-        onMessageSent(result.message);
-        if (inputRef.current) {
-          inputRef.current.style.height = "auto";
-          inputRef.current.focus();
+      if (editingMessage) {
+        // Handle Edit
+        const result = await editMessage(editingMessage.id, content);
+        if (result.success) {
+          setContent("");
+          onCancelEdit?.();
+        } else {
+          toast.error(result.error || "Failed to edit message");
         }
       } else {
-        toast.error(result.error || "Failed to send message");
+        // Handle Send new message
+        let currentAudioUrl = undefined;
+        let currentImageUrl = undefined;
+        
+        if (audioBlob) {
+          setIsUploading(true);
+          const file = new File([audioBlob], "audio_message.webm", { type: "audio/webm" });
+          const uploadRes = await uploadFiles("audioUploader", {
+            files: [file],
+          });
+          currentAudioUrl = uploadRes[0].url;
+        }
+
+        if (imageFile) {
+          setIsUploading(true);
+          const uploadRes = await uploadFiles("imageUploader", {
+            files: [imageFile],
+          });
+          currentImageUrl = uploadRes[0].url;
+        }
+
+        const result = await sendMessage(conversationId, content, currentAudioUrl, currentImageUrl, replyingTo?.id);
+        
+        if (result.success) {
+          setContent("");
+          setAudioBlob(null);
+          setRecordingTime(0);
+          cancelImage();
+          if (replyingTo) onCancelReply?.();
+          // We rely on firebase listener in chat-area to handle appending
+          // but we also have onMessageSent here for immediate updates
+          onMessageSent(result.message);
+          if (inputRef.current) {
+            inputRef.current.style.height = "auto";
+            inputRef.current.focus();
+          }
+        } else {
+          toast.error(result.error || "Failed to send message");
+        }
       }
     } catch (error) {
       console.error("Error sending message:", error);
@@ -185,16 +225,55 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
   };
 
   return (
-    <div className="relative border-t border-zinc-800 bg-black p-4">
+    <div className="relative border-t border-zinc-800 bg-black p-4 flex flex-col gap-2">
       {showEmoji && (
         <div ref={emojiRef} className="absolute bottom-full right-4 mb-2 z-50">
           <EmojiPicker onEmojiClick={onEmojiClick} theme={Theme.DARK} />
         </div>
       )}
       
+      {/* Reply Preview Area */}
+      {replyingTo && !editingMessage && (
+        <div className="flex items-center justify-between bg-zinc-900 rounded-lg p-3 border-l-4 border-emerald-500 mb-2">
+          <div className="flex flex-col overflow-hidden mr-4">
+            <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold mb-1">
+              <Reply className="w-3 h-3" />
+              <span>Replying to {replyingTo.sender?.name || "someone"}</span>
+            </div>
+            <p className="text-sm text-zinc-300 truncate">
+              {replyingTo.content || (replyingTo.imageUrl ? "📷 Image" : "🎤 Audio")}
+            </p>
+          </div>
+          <button 
+            onClick={onCancelReply}
+            className="p-1.5 text-zinc-500 hover:text-white rounded-full hover:bg-zinc-800 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Edit Preview Area */}
+      {editingMessage && (
+        <div className="flex items-center justify-between bg-zinc-900 rounded-lg p-3 border-l-4 border-amber-500 mb-2">
+          <div className="flex flex-col overflow-hidden mr-4">
+            <div className="flex items-center gap-2 text-amber-500 text-xs font-bold mb-1">
+              <Edit2 className="w-3 h-3" />
+              <span>Editing Message</span>
+            </div>
+          </div>
+          <button 
+            onClick={onCancelEdit}
+            className="p-1.5 text-zinc-500 hover:text-white rounded-full hover:bg-zinc-800 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      
       {/* Image Preview Area */}
       {imagePreview && (
-        <div className="mb-3 relative inline-block">
+        <div className="relative inline-block self-start">
           <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900">
             <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">

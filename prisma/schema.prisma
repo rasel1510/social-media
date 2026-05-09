@@ -44,6 +44,7 @@ model User {
   conversations2 Conversation[] @relation("conversations2")
   sentMessages   Message[]
   mentionsReceived Mention[]
+  messageReactions MessageReaction[]
 }
 
 model Follow {
@@ -256,7 +257,36 @@ model Message {
   audioUrl       String?      // Audio message URL
   imageUrl       String?      // Image message URL
 
+  isEdited       Boolean      @default(false)
+  isForwarded    Boolean      @default(false)
+  replyToId      String?
+  replyTo        Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]    @relation("MessageReplies")
+  reactions      MessageReaction[]
+
   @@index([conversationId])
   @@index([senderId])
   @@index([postId])
+  @@index([replyToId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  // We can just use the user ID, or relate it directly. Usually relating it directly is best for consistency:
+  // (Note: To avoid adding a reverse relation on User, I'm NOT creating a back-reference relation field in the User model unless strictly necessary, but Prisma might complain. I will check.)
+  // Actually, wait, let's look at Reaction for Posts:
+  // model Reaction { ... user User @relation(fields: [userId], ...) }
+  // Since we already have a Reaction model, I will add `messageReactions MessageReaction[]` to User in another replacement chunk if needed, but wait: Prisma 5 doesn't always require reverse relation if it's implicitly mapped? No, Prisma requires a reverse relation field on the User model.
+  // Instead of adding it to User and cluttering it, let's just make sure I add `messageReactions MessageReaction[]` to User.
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
 }
