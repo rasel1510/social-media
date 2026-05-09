@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MessageInput } from "./message-input";
-import { getMessages, markAsRead, reactToMessage, deleteMessageForMe, deleteMessageForEveryone } from "@/app/actions/message";
+import { getMessages, markAsRead, reactToMessage, deleteMessageForMe, deleteMessageForEveryone, getConversations, sendMessage } from "@/app/actions/message";
 import { Loader2, Info, X, Mic, MoreVertical, Copy, Reply as ReplyIcon, Edit2, Forward, SmilePlus, Trash2, Ban } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -35,6 +35,8 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [editingMessage, setEditingMessage] = useState<any>(null);
   const [forwardingMessage, setForwardingMessage] = useState<any>(null);
+  const [recentConversations, setRecentConversations] = useState<any[]>([]);
+  const [forwardingTo, setForwardingTo] = useState<string | null>(null);
   const [deletingMessage, setDeletingMessage] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -133,6 +135,32 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
     }
     setIsDeleting(false);
     setDeletingMessage(null);
+  };
+
+  useEffect(() => {
+    if (forwardingMessage) {
+      getConversations().then(setRecentConversations);
+    }
+  }, [forwardingMessage]);
+
+  const handleForward = async (targetConvId: string) => {
+    if (forwardingTo) return;
+    setForwardingTo(targetConvId);
+    const result = await sendMessage(
+      targetConvId,
+      forwardingMessage.content || "",
+      forwardingMessage.audioUrl,
+      forwardingMessage.imageUrl,
+      undefined,
+      true
+    );
+    if (result.success) {
+      toast.success("Message forwarded");
+      setForwardingMessage(null);
+    } else {
+      toast.error(result.error || "Failed to forward");
+    }
+    setForwardingTo(null);
   };
 
   return (
@@ -443,29 +471,49 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
         onCancelEdit={() => setEditingMessage(null)}
       />
 
-      {/* Forward Modal - we just show an alert for now if we don't have the friend selector ready,
-          or we can quickly scaffold a very simple modal. Given constraints, I'll log or toast. */}
+      {/* Forward Modal */}
       {forwardingMessage && (
         <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 relative">
-            <button onClick={() => setForwardingMessage(null)} className="absolute top-4 right-4 text-zinc-500 hover:text-white">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 relative flex flex-col max-h-[80vh]">
+            <button onClick={() => setForwardingMessage(null)} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-10">
               <X className="w-5 h-5" />
             </button>
-            <h3 className="text-xl font-bold text-white mb-4">Forward Message</h3>
-            <p className="text-sm text-zinc-400 mb-6">Select a conversation to forward this message to.</p>
+            <h3 className="text-xl font-bold text-white mb-2 shrink-0">Forward Message</h3>
+            <p className="text-sm text-zinc-400 mb-4 shrink-0">Select a conversation to forward this message to.</p>
             
-            {/* Minimalist Forward Placeholder. For a full implementation, you would list friend conversations here. */}
-            <div className="p-4 border border-zinc-800 rounded-xl text-center text-zinc-500 text-sm">
-              <p>In a complete system, your friends list would appear here.</p>
-              <button 
-                className="mt-4 w-full py-2 bg-emerald-500 text-black font-bold rounded-lg"
-                onClick={() => {
-                  toast.success("Forwarded successfully (Demo)");
-                  setForwardingMessage(null);
-                }}
-              >
-                Forward to Recent
-              </button>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+              {recentConversations.length === 0 ? (
+                <div className="flex justify-center items-center h-32">
+                  <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+                </div>
+              ) : (
+                recentConversations.map((conv) => (
+                  <div key={conv.id} className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-zinc-800 hover:border-emerald-500/50 transition">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-zinc-800 overflow-hidden shrink-0">
+                        {conv.user?.image ? (
+                          <img src={conv.user.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center font-bold text-emerald-400">
+                            {conv.user?.name?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm text-white">{conv.user?.name}</span>
+                        <span className="text-xs text-zinc-500">@{conv.user?.username}</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleForward(conv.id)}
+                      disabled={forwardingTo !== null}
+                      className="px-4 py-1.5 bg-emerald-500 text-black text-xs font-bold rounded-full hover:bg-emerald-400 transition disabled:opacity-50"
+                    >
+                      {forwardingTo === conv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send"}
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
