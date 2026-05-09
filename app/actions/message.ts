@@ -164,13 +164,13 @@ export async function getMessages(conversationId: string, limit = 50) {
 }
 
 // 4. Send a message
-export async function sendMessage(conversationId: string, content: string, audioUrl?: string) {
+export async function sendMessage(conversationId: string, content: string, audioUrl?: string, imageUrl?: string) {
   try {
     const session = await getSession();
     if (!session) throw new Error("Unauthorized");
 
     const currentUserId = session.user.id;
-    if (!content.trim() && !audioUrl) throw new Error("Message cannot be empty");
+    if (!content.trim() && !audioUrl && !imageUrl) throw new Error("Message cannot be empty");
 
     // Combine conversation and friendship check into one query if possible
     // or at least optimize the existing ones.
@@ -201,7 +201,7 @@ export async function sendMessage(conversationId: string, content: string, audio
 
     if (!friendship) throw new Error("You are no longer friends with this user");
 
-    const lastMsgPreview = content.trim() ? content : "🎤 Audio message";
+    const lastMsgPreview = content.trim() ? content : imageUrl ? "📷 Image message" : "🎤 Audio message";
 
     // Optimized transaction: Create message and update conversation
     const [message] = await prisma.$transaction([
@@ -209,6 +209,7 @@ export async function sendMessage(conversationId: string, content: string, audio
         data: {
           content,
           audioUrl,
+          imageUrl,
           senderId: currentUserId,
           conversationId,
         },

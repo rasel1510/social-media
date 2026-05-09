@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Smile, Loader2, Mic, StopCircle, Trash2 } from "lucide-react";
+import { Send, Smile, Loader2, Mic, StopCircle, Trash2, ImageIcon, X } from "lucide-react";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import { sendMessage } from "@/app/actions/message";
 import { uploadFiles } from "@/lib/uploadthing";
@@ -19,10 +19,13 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -37,8 +40,9 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       if (timerRef.current) clearInterval(timerRef.current);
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
     };
-  }, []);
+  }, [imagePreview]);
 
   const startRecording = async () => {
     try {
@@ -87,6 +91,26 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
     setRecordingTime(0);
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const url = URL.createObjectURL(file);
+      setImagePreview(url);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const cancelImage = () => {
+    setImageFile(null);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+      setImagePreview(null);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -94,10 +118,11 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
   };
 
   const handleSend = async () => {
-    if ((!content.trim() && !audioBlob) || isSending || isUploading) return;
+    if ((!content.trim() && !audioBlob && !imageFile) || isSending || isUploading) return;
 
     setIsSending(true);
     let currentAudioUrl = undefined;
+    let currentImageUrl = undefined;
 
     try {
       if (audioBlob) {
@@ -107,15 +132,23 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
           files: [file],
         });
         currentAudioUrl = uploadRes[0].url;
-        setIsUploading(false);
       }
 
-      const result = await sendMessage(conversationId, content, currentAudioUrl);
+      if (imageFile) {
+        setIsUploading(true);
+        const uploadRes = await uploadFiles("imageUploader", {
+          files: [imageFile],
+        });
+        currentImageUrl = uploadRes[0].url;
+      }
+
+      const result = await sendMessage(conversationId, content, currentAudioUrl, currentImageUrl);
       
       if (result.success) {
         setContent("");
         setAudioBlob(null);
         setRecordingTime(0);
+        cancelImage();
         onMessageSent(result.message);
         if (inputRef.current) {
           inputRef.current.style.height = "auto";
@@ -159,14 +192,52 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
         </div>
       )}
       
+      {/* Image Preview Area */}
+      {imagePreview && (
+        <div className="mb-3 relative inline-block">
+          <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900">
+            <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+              <button onClick={cancelImage} className="p-1.5 bg-red-500/80 text-white rounded-full hover:bg-red-500">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <button 
+            onClick={cancelImage}
+            className="absolute -top-2 -right-2 p-1 bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white rounded-full transition shadow-lg"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+      
       <div className="flex items-end gap-2 bg-zinc-900 rounded-2xl p-2 border border-zinc-800 focus-within:border-zinc-700 transition">
         {!isRecording && !audioBlob && (
-          <button
-            onClick={() => setShowEmoji(!showEmoji)}
-            className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-full transition shrink-0"
-          >
-            <Smile className="w-6 h-6" />
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={() => setShowEmoji(!showEmoji)}
+              className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-full transition shrink-0"
+              title="Add Emoji"
+            >
+              <Smile className="w-5 h-5" />
+            </button>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleImageChange} 
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-full transition shrink-0"
+              title="Attach Image"
+            >
+              <ImageIcon className="w-5 h-5" />
+            </button>
+          </div>
         )}
 
         {isRecording ? (
@@ -203,25 +274,26 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
             value={content}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Aa"
-            className="max-h-[120px] min-h-[40px] w-full resize-none bg-transparent py-2 px-2 text-white placeholder-zinc-500 focus:outline-none scrollbar-hide"
+            placeholder="Type a message..."
+            className="max-h-[120px] min-h-[40px] w-full resize-none bg-transparent py-2 px-2 text-white placeholder-zinc-500 focus:outline-none scrollbar-hide text-sm sm:text-base"
             rows={1}
           />
         )}
 
-        {!isRecording && !audioBlob && content.trim() === "" ? (
+        {!isRecording && !audioBlob && !imageFile && content.trim() === "" ? (
           <button
             onClick={startRecording}
             className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-full transition shrink-0"
+            title="Record Audio"
           >
-            <Mic className="w-6 h-6" />
+            <Mic className="w-5 h-5" />
           </button>
         ) : (
           <button
             onClick={handleSend}
-            disabled={(!content.trim() && !audioBlob) || isSending || isUploading}
+            disabled={(!content.trim() && !audioBlob && !imageFile) || isSending || isUploading}
             className={`p-2 rounded-full shrink-0 transition ${
-              (content.trim() || audioBlob) && !isSending && !isUploading
+              (content.trim() || audioBlob || imageFile) && !isSending && !isUploading
                 ? "bg-emerald-500 text-black hover:bg-emerald-400"
                 : "text-zinc-500 cursor-not-allowed"
             }`}

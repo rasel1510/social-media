@@ -254,6 +254,7 @@ model Message {
   postId         String?      // Reference to a shared post
   post           Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
   audioUrl       String?      // Audio message URL
+  imageUrl       String?      // Image message URL
 
   @@index([conversationId])
   @@index([senderId])

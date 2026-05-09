@@ -245,6 +245,12 @@ export function ChatArea({ conversationId, currentUserId, otherUser, onMessageAd
                         </div>
                       )}
                       
+                      {msg.imageUrl && (
+                        <div className="mb-2 max-w-[240px] sm:max-w-[300px] rounded-xl overflow-hidden border border-white/10 bg-black/20">
+                          <img src={msg.imageUrl} alt="Shared image" className="w-full h-auto object-cover" />
+                        </div>
+                      )}
+                      
                       {msg.content && <span>{msg.content}</span>}
                     </div>
                   </div>
