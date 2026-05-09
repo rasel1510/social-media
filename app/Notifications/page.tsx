@@ -19,13 +19,7 @@ export default async function NotificationsPage() {
   return (
     <MainLayout>
       <div className="flex flex-col min-h-screen border-r border-zinc-800">
-        <div className="sticky top-0 z-20 bg-black/80 px-4 py-4 backdrop-blur-md border-b border-zinc-800">
-          <h2 className="text-xl font-bold">Notifications</h2>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto">
-          <NotificationList initialNotifications={notifications} />
-        </div>
+        <NotificationList initialNotifications={notifications} />
       </div>
     </MainLayout>
   );

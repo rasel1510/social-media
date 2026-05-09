@@ -7,6 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { MoreHorizontal, Pencil, Trash2, CornerDownRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CommentForm } from "./CommentForm";
+import { FormattedText } from "../ui/formatted-text";
 
 interface CommentAuthor {
   name: string;
@@ -98,7 +99,7 @@ export function CommentItem({ comment, currentUserId, onEdit, onDelete, onReply,
               />
             </div>
           ) : (
-            <p className="text-sm text-zinc-300 mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
+            <FormattedText text={comment.content} className="text-sm text-zinc-300 mt-1" />
           )}
         </div>
 

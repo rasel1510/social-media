@@ -49,6 +49,27 @@ export default async function ProfilePage({ params }: { params: { username: stri
     });
   }
 
+  // Fallback: try matching by name (spaces removed) for mention links
+  if (!user) {
+    const candidates = await prisma.user.findMany({
+      where: {
+        username: null,
+      },
+      include: {
+        _count: {
+          select: {
+            followers: true,
+            following: true,
+            posts: true,
+            friendships1: true,
+            friendships2: true,
+          },
+        },
+      },
+    });
+    user = candidates.find((u) => u.name.replace(/\s+/g, '') === username) || null;
+  }
+
   if (!user) {
     notFound();
   }

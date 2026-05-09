@@ -16,6 +16,78 @@ async function getSession() {
   return session;
 }
 
+/**
+ * Parses content for @username mentions, creates Mention records and Notifications.
+ */
+async function handleMentions(content: string, postId?: string, commentId?: string) {
+  try {
+    const session = await getSession();
+    if (!session) return;
+
+    // Regex to find usernames starting with @ (e.g., @rasel)
+    const mentionRegex = /@(\w+[\w.]*)/g;
+    const matches = Array.from(content.matchAll(mentionRegex));
+    const usernames = Array.from(new Set(matches.map((match) => match[1])));
+
+    if (usernames.length === 0) return;
+
+    // Find users by username first
+    const byUsername = await (prisma as any).user.findMany({
+      where: {
+        username: { in: usernames },
+      },
+      select: { id: true, username: true, name: true },
+    });
+
+    // For mentions that didn't match a username, try matching by name (spaces removed)
+    const matchedUsernames = new Set(byUsername.map((u: any) => u.username));
+    const unmatchedMentions = usernames.filter((u) => !matchedUsernames.has(u));
+
+    let byName: any[] = [];
+    if (unmatchedMentions.length > 0) {
+      // Get all users and filter by name match (spaces removed)
+      const allCandidates = await (prisma as any).user.findMany({
+        where: {
+          username: null, // Only check users without a username
+        },
+        select: { id: true, username: true, name: true },
+      });
+      byName = allCandidates.filter((u: any) =>
+        unmatchedMentions.includes(u.name.replace(/\s+/g, ''))
+      );
+    }
+
+    const mentionedUsers = [...byUsername, ...byName];
+
+    for (const user of mentionedUsers) {
+      // Don't notify yourself
+      if (user.id === session.user.id) continue;
+
+      // Create Mention record
+      await (prisma as any).mention.create({
+        data: {
+          userId: user.id,
+          postId: postId || null,
+          commentId: commentId || null,
+        },
+      });
+
+      // Create Notification
+      await (prisma as any).notification.create({
+        data: {
+          userId: user.id,
+          actorId: session.user.id,
+          type: "MENTION",
+          postId: postId || null,
+          commentId: commentId || null,
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Error handling mentions:", error);
+  }
+}
+
 export async function createPost(content: string, image?: string, location?: string) {
   try {
     const session = await getSession();
@@ -25,7 +97,7 @@ export async function createPost(content: string, image?: string, location?: str
     if (!content.trim() && !image && !location) throw new Error("Post content cannot be empty");
     if (content.length > 2000) throw new Error("Post content is too long");
 
-    await prisma.post.create({
+    const post = await prisma.post.create({
       data: {
         content: content.trim(),
         image: image || null,
@@ -33,6 +105,9 @@ export async function createPost(content: string, image?: string, location?: str
         authorId: session.user.id,
       },
     });
+
+    // Handle mentions in the background
+    await handleMentions(content, post.id);
 
     revalidatePath("/");
     return { success: true };
@@ -288,6 +363,9 @@ export async function createComment(content: string, postId: string, parentId?: 
         }
       }
     });
+
+    // Handle mentions
+    await handleMentions(content, postId, comment.id);
 
     // Notify post author
     const post = await prisma.post.findUnique({

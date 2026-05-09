@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea } from "@/components/ui/mention-textarea";
 import { Send, Loader2, Smile } from "lucide-react";
 import dynamic from 'next/dynamic';
 
@@ -39,11 +39,11 @@ export function CommentForm({ onSubmit, placeholder = "Write a comment...", init
 
   return (
     <form onSubmit={handleSubmit} className={`flex flex-col gap-2 ${isReply ? "mt-2" : "mt-4"}`}>
-      <Textarea
+      <MentionTextarea
         value={content}
-        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
+        onValueChange={setContent}
         placeholder={placeholder}
-        className="min-h-[80px] bg-zinc-900 border-zinc-800 focus:border-zinc-700 resize-none"
+        className="min-h-[80px] bg-zinc-900 border-zinc-800 focus:border-zinc-700 resize-none rounded-md px-3 py-2"
         maxLength={500}
       />
       <div className="flex justify-between items-center relative">

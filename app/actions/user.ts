@@ -43,3 +43,37 @@ export async function updateProfile(data: {
 
   return { success: true, user: updatedUser };
 }
+
+export async function searchMentionUsers(query: string) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session?.user) return [];
+
+  const whereClause: any = {
+    id: { not: session.user.id }, // Exclude yourself
+  };
+
+  // If there's a query, filter by name or username
+  if (query && query.length >= 1) {
+    whereClause.OR = [
+      { name: { contains: query, mode: "insensitive" } },
+      { username: { contains: query, mode: "insensitive" } },
+    ];
+  }
+
+  const users = await (prisma as any).user.findMany({
+    where: whereClause,
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      image: true,
+    },
+    take: 5,
+    orderBy: { name: "asc" },
+  });
+
+  return users;
+}

@@ -10,8 +10,15 @@ import {
   Terminal,
   UserIcon,
   LogOut,
-  LogIn
+  LogIn,
+  MoreHorizontal
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -56,7 +63,7 @@ export function Sidebar() {
           updateCounts();
         }
       }, 15000);
-      
+
       return () => clearInterval(interval);
     } else {
       setUnreadCount(0);
@@ -188,30 +195,39 @@ export function Sidebar() {
       <div className="mt-auto">
         {(mounted && !isPending) && (
           session ? (
-            <div className="flex items-center justify-between rounded-full p-3 transition hover:bg-zinc-900 group relative">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 font-bold text-emerald-400 uppercase overflow-hidden">
-                  {session.user.image ? (
-                    <Image src={session.user.image} alt="User" width={44} height={44} className="h-full w-full object-cover" />
-                  ) : (
-                    session.user.name?.[0] || "?"
-                  )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="flex cursor-pointer items-center justify-between rounded-full p-3 transition hover:bg-zinc-900 group outline-none">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-800 font-bold text-emerald-400 uppercase overflow-hidden">
+                      {session.user.image ? (
+                        <Image src={session.user.image} alt="User" width={44} height={44} className="h-full w-full object-cover" />
+                      ) : (
+                        session.user.name?.[0] || "?"
+                      )}
+                    </div>
+                    <div className="hidden xl:block overflow-hidden text-left">
+                      <h3 className="text-sm font-bold truncate">
+                        {session.user.name}
+                      </h3>
+                      <p className="text-xs text-zinc-500 truncate">
+                        @{(user?.username || session.user.email.split('@')[0])}
+                      </p>
+                    </div>
+                  </div>
+                  <MoreHorizontal className="hidden h-5 w-5 text-zinc-500 xl:block" />
                 </div>
-                <div className="overflow-hidden">
-                  <h3 className="text-sm font-bold truncate">
-                    {session.user.name} ({ (user?.username || session.user.email.split('@')[0]).substring(0, 3) })
-                  </h3>
-                </div>
-              </div>
-
-              <button
-                onClick={handleLogout}
-                className="ml-2 text-zinc-500 hover:text-red-400 transition"
-                title="Log out"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" side="top" className="w-72 bg-black border-zinc-800 text-white p-2 rounded-2xl shadow-[0_0_20px_rgba(255,255,255,0.1)] mb-4">
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="flex  items-center gap-3 rounded-xl p-2 text-sm font-bold  outline-none border-none"
+                >
+                  <LogOut className="h-5 w-5 text-red-500" />
+                  <span>Log out @{(user?.username || session.user.email.split('@')[0])}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <Link href="/login" className="flex items-center gap-3 rounded-full p-3 transition hover:bg-zinc-900 text-emerald-400 font-bold">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/10">

@@ -13,6 +13,7 @@ import { ShareDialog } from "./post/share-dialog";
 import { ReactionButton } from "./post/reaction-button";
 import { PostMenu } from "./post/post-menu";
 import { ReactionDialog } from "./post/reaction-dialog";
+import { FormattedText } from "./ui/formatted-text";
 
 interface PostCardProps {
   post: Post;
@@ -137,7 +138,7 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
               </div>
             </div>
           ) : (
-            <p className="mt-1 text-white leading-normal whitespace-pre-wrap">{post.content}</p>
+            <FormattedText text={post.content} className="mt-1 text-white leading-normal" />
           )}
 
           {post.image && (

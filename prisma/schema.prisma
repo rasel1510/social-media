@@ -43,6 +43,7 @@ model User {
   conversations1 Conversation[] @relation("conversations1")
   conversations2 Conversation[] @relation("conversations2")
   sentMessages   Message[]
+  mentionsReceived Mention[]
 }
 
 model Follow {
@@ -110,6 +111,7 @@ model Comment {
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("CommentReplies")
+  mentions  Mention[]
 }
 
 // New Share model for post sharing
@@ -141,6 +143,7 @@ model Post {
   notifications Notification[]
   messages      Message[]
   location      String?
+  mentions      Mention[]
 }
 
 model Reaction {
@@ -171,6 +174,22 @@ model Notification {
 
   @@index([userId])
   @@index([actorId])
+}
+
+model Mention {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String?
+  commentId String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([postId])
+  @@index([commentId])
 }
 
 // Add relations to User model

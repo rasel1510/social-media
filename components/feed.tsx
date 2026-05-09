@@ -8,6 +8,7 @@ import { useUploadThing } from "@/lib/uploadthing";
 import { useRouter } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { toast } from "sonner";
+import { MentionTextarea } from "./ui/mention-textarea";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -228,10 +229,10 @@ export function Feed({ initialPosts, currentUserId }: FeedProps) {
                     </div>
 
                     <div className="flex-1">
-                        <textarea
+                        <MentionTextarea
                             ref={textareaRef}
                             value={content}
-                            onChange={(e) => setContent(e.target.value)}
+                            onValueChange={setContent}
                             placeholder="What's happening in your mind?"
                             className="min-h-[50px] w-full resize-none bg-transparent text-base outline-none placeholder:text-zinc-500 sm:text-lg"
                         />
