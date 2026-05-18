@@ -86,6 +86,7 @@ export function ProfileUserList({ userId, type, currentUserId }: ProfileUserList
               user={user} 
               initialIsFollowing={user.isFollowing} 
               currentUserId={currentUserId}
+              showUnfollowButton={type === "following"}
             />
           ))
         ) : (

@@ -53,6 +53,7 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
   const initials = (user.name?.[0] || rawUsername[0] || "U").toUpperCase();
 
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
+  const [isHovered, setIsHovered] = useState(false);
   const [friendStatus, setFriendStatus] = useState<FriendStatus>(initialFriendStatus);
   const [isPending, startTransition] = useTransition();
   const [modalOpen, setModalOpen] = useState(false);
@@ -274,8 +275,10 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
                     }`}
                   onClick={handleToggleFollow}
                   disabled={isPending}
+                  onMouseEnter={() => setIsHovered(true)}
+                  onMouseLeave={() => setIsHovered(false)}
                 >
-                  {isFollowing ? "Following" : "Follow"}
+                  {isFollowing ? (isHovered ? "Unfollow" : "Following") : "Follow"}
                 </Button>
               </>
             )}

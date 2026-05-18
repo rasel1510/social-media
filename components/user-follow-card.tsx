@@ -15,11 +15,13 @@ interface UserFollowCardProps {
   };
   initialIsFollowing?: boolean;
   currentUserId?: string;
+  showUnfollowButton?: boolean;
 }
 
-export function UserFollowCard({ user, initialIsFollowing = false, currentUserId }: UserFollowCardProps) {
+export function UserFollowCard({ user, initialIsFollowing = false, currentUserId, showUnfollowButton = false }: UserFollowCardProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [isPending, startTransition] = useTransition();
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleToggleFollow = () => {
     if (!currentUserId) {
@@ -69,18 +71,31 @@ export function UserFollowCard({ user, initialIsFollowing = false, currentUserId
       </Link>
 
       {currentUserId !== user.id && (
-        <Button
-          variant={isFollowing ? "outline" : "default"}
-          className={`h-8 rounded-full px-4 text-xs font-bold transition-all ${
-            isFollowing
-              ? "border-zinc-700 bg-transparent text-white hover:border-red-500 hover:bg-red-500/10 hover:text-red-500"
-              : "bg-white text-black hover:bg-zinc-200"
-          }`}
-          onClick={handleToggleFollow}
-          disabled={isPending}
-        >
-          {isFollowing ? "Following" : "Follow"}
-        </Button>
+        showUnfollowButton && isFollowing ? (
+          <Button
+            variant="outline"
+            className="h-8 rounded-full px-4 text-xs font-bold transition-all border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-black hover:border-red-500"
+            onClick={handleToggleFollow}
+            disabled={isPending}
+          >
+            Unfollow
+          </Button>
+        ) : (
+          <Button
+            variant={isFollowing ? "outline" : "default"}
+            className={`h-8 rounded-full px-4 text-xs font-bold transition-all ${
+              isFollowing
+                ? "border-zinc-700 bg-transparent text-white hover:border-red-500 hover:bg-red-500/10 hover:text-red-500"
+                : "bg-white text-black hover:bg-zinc-200"
+            }`}
+            onClick={handleToggleFollow}
+            disabled={isPending}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {isFollowing ? (isHovered ? "Unfollow" : "Following") : "Follow"}
+          </Button>
+        )
       )}
     </div>
   );
