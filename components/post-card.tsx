@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, MessageCircle, Share2, MapPin } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deletePost, updatePost } from "@/app/actions";
@@ -14,6 +14,7 @@ import { ReactionButton } from "./post/reaction-button";
 import { PostMenu } from "./post/post-menu";
 import { ReactionDialog } from "./post/reaction-dialog";
 import { FormattedText } from "./ui/formatted-text";
+import { addHiddenPost, getHiddenPosts } from "./post/hidden-post-utils";
 
 interface PostCardProps {
   post: Post;
@@ -34,7 +35,14 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
   const [shareCount, setShareCount] = useState((post as any)._count?.shares || (post as any).shares?.length || 0);
   const [isShareModalOpen, setIsShareModalOpen] = useState(initialShowShare);
   const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (getHiddenPosts().includes(post.id)) {
+      setIsHidden(true);
+    }
+  }, [post.id]);
 
   const { data: session } = authClient.useSession();
   const rawUsername = post.author.username || post.authorId || "";
@@ -69,6 +77,8 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
       }
     });
   };
+
+  if (isHidden) return null;
 
   return (
     <div className="border-b border-zinc-800 p-4 lg:p-5 transition hover:bg-zinc-950/50">
@@ -110,6 +120,10 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
               isPending={isPending}
               onEdit={() => setIsEditing(true)}
               onDelete={handleDelete}
+              onHide={() => {
+                addHiddenPost(post.id);
+                setIsHidden(true);
+              }}
             />
           </div>
 
