@@ -27,8 +27,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 3. Authenticated users trying to access root or login/signup should be redirected home
-  if (sessionCookie && (isAuthRoute || pathname === "/")) {
+  // 3. Authenticated users trying to access root should be redirected home
+  if (sessionCookie && pathname === "/") {
     return NextResponse.redirect(new URL("/home", request.url));
   }
 

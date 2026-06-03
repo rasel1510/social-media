@@ -8,6 +8,7 @@ import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { checkUserExists } from "@/app/actions";
 
 function LoginContent() {
+    const { data: session } = authClient.useSession();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -16,13 +17,19 @@ function LoginContent() {
     const [error, setError] = useState("");
     const [mounted, setMounted] = useState(false);
 
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const callbackURL = searchParams.get("callbackURL") || "/"; // Get the return path
+
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const callbackURL = searchParams.get("callbackURL") || "/"; // Get the return path
+    useEffect(() => {
+        if (session) {
+            router.push("/home");
+        }
+    }, [session, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -114,9 +121,9 @@ function LoginContent() {
                         </div>
 
                         <div className="flex items-center justify-end">
-                            <span className="text-sm font-medium text-emerald-400 cursor-not-allowed">
+                            <Link href="/forgot-password" className="text-sm font-medium text-emerald-400 hover:underline">
                                 Forgot password?
-                            </span>
+                            </Link>
                         </div>
 
                         <button

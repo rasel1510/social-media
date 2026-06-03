@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Terminal, Mail, User, Phone, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function SignUpPage() {
+    const { data: session } = authClient.useSession();
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
@@ -17,11 +18,17 @@ export default function SignUpPage() {
     const [error, setError] = useState("");
     const [mounted, setMounted] = useState(false);
 
+    const router = useRouter();
+
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    const router = useRouter();
+    useEffect(() => {
+        if (session) {
+            router.push("/home");
+        }
+    }, [session, router]);
 
     const handleSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
