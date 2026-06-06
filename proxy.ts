@@ -17,8 +17,8 @@ export function proxy(request: NextRequest) {
     request.cookies.get("better-auth.session_token") ||
     request.cookies.get("__Secure-better-auth.session_token");
 
-  // Routes that do not require authentication (login & signup pages)
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  // Routes that do not require authentication (login, signup, and password reset pages)
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password");
 
   // 2. Unauthenticated users trying to access any protected route (including home)
   if (!sessionCookie && !isAuthRoute) {
