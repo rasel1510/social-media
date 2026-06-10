@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { checkContentForBadWords, applyDemeritPoint } from "@/lib/moderation";
 
 /**
  * Utility to verify session and get user ID
@@ -97,6 +98,26 @@ export async function createPost(content: string, image?: string, location?: str
     if (!content.trim() && !image && !location) throw new Error("Post content cannot be empty");
     if (content.length > 2000) throw new Error("Post content is too long");
 
+    // Check if post contains bad words
+    const containsBadWords = await checkContentForBadWords(content);
+    
+    if (containsBadWords) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { demeritPoints: true }
+      });
+      const currentPoints = user?.demeritPoints || 0;
+      if (currentPoints + 1 >= 3) {
+        // Will trigger permanent ban/deletion
+        await applyDemeritPoint(session.user.id);
+        return { 
+          success: false, 
+          error: "Your account has been permanently deleted because you accumulated 3 demerit points for content policy violations.", 
+          deleted: true 
+        };
+      }
+    }
+
     const post = await prisma.post.create({
       data: {
         content: content.trim(),
@@ -106,11 +127,22 @@ export async function createPost(content: string, image?: string, location?: str
       },
     });
 
+    let warningMessage = undefined;
+    let flagged = false;
+
+    if (containsBadWords) {
+      const result = await applyDemeritPoint(session.user.id, post.id);
+      if (!result.deleted) {
+        flagged = true;
+        warningMessage = result.warning;
+      }
+    }
+
     // Handle mentions in the background
     await handleMentions(content, post.id);
 
     revalidatePath("/");
-    return { success: true };
+    return { success: true, flagged, warning: warningMessage };
   } catch (error: any) {
     console.error("Error in createPost:", error);
     return { success: false, error: error.message || "Failed to create post" };
@@ -163,13 +195,43 @@ export async function updatePost(postId: string, content: string) {
       throw new Error("You can only edit your own posts");
     }
 
+    const containsBadWords = await checkContentForBadWords(content);
+    
+    if (containsBadWords) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { demeritPoints: true }
+      });
+      const currentPoints = user?.demeritPoints || 0;
+      if (currentPoints + 1 >= 3) {
+        // Will trigger permanent ban/deletion
+        await applyDemeritPoint(session.user.id);
+        return { 
+          success: false, 
+          error: "Your account has been permanently deleted because you accumulated 3 demerit points for content policy violations.", 
+          deleted: true 
+        };
+      }
+    }
+
     await prisma.post.update({
       where: { id: postId },
       data: { content: content.trim() },
     });
 
+    let warningMessage = undefined;
+    let flagged = false;
+
+    if (containsBadWords) {
+      const result = await applyDemeritPoint(session.user.id, postId);
+      if (!result.deleted) {
+        flagged = true;
+        warningMessage = result.warning;
+      }
+    }
+
     revalidatePath("/");
-    return { success: true };
+    return { success: true, flagged, warning: warningMessage };
   } catch (error: any) {
     console.error("Error in updatePost:", error);
     return { success: false, error: error.message || "Failed to update post" };
@@ -505,6 +567,25 @@ export async function createShare(postId: string, content?: string) {
 
     if (content && content.length > 2000) throw new Error("Caption is too long");
 
+    const containsBadWords = content ? await checkContentForBadWords(content) : false;
+
+    if (containsBadWords) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { demeritPoints: true }
+      });
+      const currentPoints = user?.demeritPoints || 0;
+      if (currentPoints + 1 >= 3) {
+        // Will trigger permanent ban/deletion
+        await applyDemeritPoint(session.user.id);
+        return { 
+          success: false, 
+          error: "Your account has been permanently deleted because you accumulated 3 demerit points for content policy violations.", 
+          deleted: true 
+        };
+      }
+    }
+
     await prisma.share.create({
       data: {
         postId,
@@ -529,6 +610,17 @@ export async function createShare(postId: string, content?: string) {
       }
     });
 
+    let warningMessage = undefined;
+    let flagged = false;
+
+    if (containsBadWords) {
+      const result = await applyDemeritPoint(session.user.id, sharePost.id);
+      if (!result.deleted) {
+        flagged = true;
+        warningMessage = result.warning;
+      }
+    }
+
     // Notify original post author
     const originalPost = await prisma.post.findUnique({
       where: { id: postId },
@@ -547,7 +639,7 @@ export async function createShare(postId: string, content?: string) {
     }
 
     revalidatePath("/");
-    return { success: true, sharePost };
+    return { success: true, sharePost, flagged, warning: warningMessage };
   } catch (error: any) {
     console.error("Error in createShare:", error);
     return { success: false, error: "Failed to share post" };

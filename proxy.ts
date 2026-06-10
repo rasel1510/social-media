@@ -4,11 +4,12 @@ import type { NextRequest } from "next/server";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Skip internal Next.js paths, static files, and API routes
+  // 1. Skip internal Next.js paths, static files, API routes, and Server Actions
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
-    pathname.includes(".") // matches files with extensions like .ico, .png, etc.
+    pathname.includes(".") || // matches files with extensions like .ico, .png, etc.
+    request.headers.has("next-action")
   ) {
     return NextResponse.next();
   }

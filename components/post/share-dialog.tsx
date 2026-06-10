@@ -10,6 +10,7 @@ import { createShare } from "@/app/actions";
 import { sendPostInMessage } from "@/app/actions/message";
 import { getUserFriends } from "@/app/actions/friend";
 import dynamic from 'next/dynamic';
+import { authClient } from "@/lib/auth-client";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -100,7 +101,17 @@ export function ShareDialog({ isOpen, onOpenChange, post, currentUser, onSuccess
           onOpenChange(false);
           setShareCaption("");
           setShowEmojiPicker(false);
-          toast.success("Shared to your feed!");
+          if (res.flagged) {
+            toast.warning(res.warning || "Your share contains inappropriate language.");
+          } else {
+            toast.success("Shared to your feed!");
+          }
+        } else {
+          toast.error(res.error || "Failed to share post");
+          if (res.deleted) {
+            await authClient.signOut();
+            window.location.href = "/signup";
+          }
         }
       } catch (e) {
         console.error(e);

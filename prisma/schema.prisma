@@ -26,6 +26,7 @@ model User {
   study         String?
   work          String?
   address       String?
+  demeritPoints Int       @default(0)
   sessions      Session[]
   accounts      Account[]
   posts         Post[]
@@ -108,7 +109,7 @@ model Comment {
   parentId  String?    // Self‑relation for replies
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("CommentReplies")
@@ -121,7 +122,7 @@ model Share {
   sharerId  String
   postId    String
   createdAt DateTime @default(now())
-  sharer    User @relation(fields: [sharerId], references: [id])
+  sharer    User @relation(fields: [sharerId], references: [id], onDelete: Cascade)
   post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
@@ -130,7 +131,7 @@ model Post {
   content       String?
   image         String?
   createdAt     DateTime @default(now())
-  author        User     @relation(fields: [authorId], references: [id])
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId      String
   
   // Shared post relations

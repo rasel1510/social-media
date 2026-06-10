@@ -70,10 +70,24 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
     }
     startTransition(async () => {
       try {
-        await updatePost(post.id, editedContent);
-        setIsEditing(false);
+        const res = await updatePost(post.id, editedContent);
+        if (res?.success) {
+          setIsEditing(false);
+          if (res.flagged) {
+            toast.warning(res.warning || "Your post contains inappropriate language.");
+          } else {
+            toast.success("Post updated successfully!");
+          }
+        } else {
+          toast.error(res?.error || "Failed to update post");
+          if (res?.deleted) {
+            await authClient.signOut();
+            window.location.href = "/signup";
+          }
+        }
       } catch (error) {
         console.error("Update failed:", error);
+        toast.error("Failed to update post.");
       }
     });
   };

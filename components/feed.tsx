@@ -168,9 +168,17 @@ export function Feed({ initialPosts, currentUserId }: FeedProps) {
                 setImage(null);
                 setLocation(null);
                 setShowEmojiPicker(false);
-                toast.success("Post created successfully!");
+                if (res.flagged) {
+                    toast.warning(res.warning || "Your post contains inappropriate language.");
+                } else {
+                    toast.success("Post created successfully!");
+                }
             } else {
                 toast.error(res?.error || "Failed to create post");
+                if (res?.deleted) {
+                    await authClient.signOut();
+                    window.location.href = "/signup";
+                }
             }
         });
     };

@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { ImageIcon, Code2, Smile, X, Loader2 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing";
 import dynamic from 'next/dynamic';
+import { toast } from "sonner";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -78,9 +79,20 @@ export function ProfileFeed({ userId, type, currentUserId, isOwnProfile }: Profi
         setContent("");
         setImage(null);
         setShowEmojiPicker(false);
+        if (result.flagged) {
+          toast.warning(result.warning || "Your post contains inappropriate language.");
+        } else {
+          toast.success("Post created successfully!");
+        }
         // Optimistically update or just re-fetch
         const userPosts = await getUserPosts(userId);
         setPosts(userPosts as any);
+      } else {
+        toast.error(result?.error || "Failed to create post");
+        if (result?.deleted) {
+          await authClient.signOut();
+          window.location.href = "/signup";
+        }
       }
     });
   };

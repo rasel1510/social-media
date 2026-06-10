@@ -132,10 +132,19 @@ const CreatePostPage = () => {
       try {
         const result = await createPost(content, image || undefined, location || undefined);
         if (result?.success) {
+          if (result.flagged) {
+            toast.warning(result.warning || "Your post contains inappropriate language.");
+          } else {
+            toast.success("Post created successfully!");
+          }
           router.push("/");
           router.refresh();
         } else {
           toast.error(result?.error || "Failed to create post");
+          if (result?.deleted) {
+            await authClient.signOut();
+            window.location.href = "/signup";
+          }
         }
       } catch (error) {
         toast.error("Something went wrong while posting.");

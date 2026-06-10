@@ -17,6 +17,9 @@ export const authClient = createAuthClient({
             coverImage: {
                 type: "string",
             },
+            demeritPoints: {
+                type: "number",
+            },
         },
     },
 });

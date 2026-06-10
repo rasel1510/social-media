@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { getNotifications, markNotificationsAsRead } from "@/app/actions";
 import { acceptFriendRequest, rejectFriendRequest } from "@/app/actions/friend";
-import { Loader2, Heart, MessageCircle, Share2, Reply, Bell, UserPlus, Check, X as XIcon, AtSign } from "lucide-react";
+import { Loader2, Heart, MessageCircle, Share2, Reply, Bell, UserPlus, Check, X as XIcon, AtSign, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
@@ -98,6 +98,7 @@ export function NotificationList({ initialNotifications }: NotificationListProps
       case "FRIEND_REQUEST": return <UserPlus className="h-4 w-4 text-blue-400" />;
       case "FOLLOW": return <UserPlus className="h-4 w-4 text-emerald-400" />;
       case "MENTION": return <AtSign className="h-4 w-4 text-purple-500" />;
+      case "DEMERIT": return <AlertTriangle className="h-4 w-4 text-red-500" />;
       default: return <Bell className="h-4 w-4 text-emerald-500" />;
     }
   };
@@ -111,6 +112,7 @@ export function NotificationList({ initialNotifications }: NotificationListProps
       case "FRIEND_REQUEST": return "sent you a friend request";
       case "FOLLOW": return "started following you";
       case "MENTION": return notification.commentId ? "mentioned you in a comment" : "mentioned you in a post";
+      case "DEMERIT": return "received a demerit point for inappropriate content. Warning: 3 demerit points will result in permanent account deletion!";
       default: return "interacted with you";
     }
   };
@@ -175,7 +177,13 @@ export function NotificationList({ initialNotifications }: NotificationListProps
           {filteredNotifications.map((notification) => {
             const content = (
               <div
-                className={`flex gap-3 p-4 hover:bg-zinc-900/50 transition cursor-pointer group ${!notification.isRead ? 'bg-emerald-500/5' : ''}`}
+                className={`flex gap-3 p-4 hover:bg-zinc-900/50 transition cursor-pointer group ${
+                  notification.type === "DEMERIT"
+                    ? "bg-red-950/20 border-l-4 border-red-500"
+                    : !notification.isRead
+                      ? "bg-emerald-500/5"
+                      : ""
+                }`}
               >
                 {/* Actor Avatar */}
                 <Link

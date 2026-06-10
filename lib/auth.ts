@@ -48,6 +48,11 @@ export const auth = betterAuth({
                 type: "string",
                 required: false,
             },
+            demeritPoints: {
+                type: "number",
+                required: false,
+                defaultValue: 0,
+            },
         },
     },
 });
