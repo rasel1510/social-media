@@ -4,8 +4,11 @@ import { useState, useEffect, Suspense } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2, UserCheck } from "lucide-react";
 import { checkUserExists } from "@/app/actions";
+
+const DEMO_EMAIL = "demo@socialmedia.com";
+const DEMO_PASSWORD = "Demo@12345";
 
 function LoginContent() {
     const { data: session } = authClient.useSession();
@@ -13,6 +16,7 @@ function LoginContent() {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isDemoLoading, setIsDemoLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState("");
     const [mounted, setMounted] = useState(false);
@@ -57,6 +61,35 @@ function LoginContent() {
             setError("An unexpected error occurred.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDemoLogin = async () => {
+        setIsDemoLoading(true);
+        setError("");
+        try {
+            // Seed demo account if it doesn't exist
+            await fetch("/api/seed-demo", { method: "POST" });
+
+            // Auto-fill the form
+            setEmail(DEMO_EMAIL);
+            setPassword(DEMO_PASSWORD);
+
+            // Sign in with demo credentials
+            const { data, error: loginError } = await authClient.signIn.email({
+                email: DEMO_EMAIL,
+                password: DEMO_PASSWORD,
+                callbackURL: callbackURL,
+            });
+            if (loginError) {
+                setError("Demo login failed. Please try again.");
+            } else {
+                router.push(callbackURL);
+            }
+        } catch (err) {
+            setError("Demo login failed. Please try again.");
+        } finally {
+            setIsDemoLoading(false);
         }
     };
 
@@ -120,7 +153,17 @@ function LoginContent() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-between">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEmail(DEMO_EMAIL);
+                                    setPassword(DEMO_PASSWORD);
+                                }}
+                                className="text-sm font-medium text-amber-400 hover:text-amber-300 hover:underline transition"
+                            >
+                                Use Demo Account
+                            </button>
                             <Link href="/forgot-password" className="text-sm font-medium text-emerald-400 hover:underline">
                                 Forgot password?
                             </Link>
@@ -128,7 +171,7 @@ function LoginContent() {
 
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isLoading || isDemoLoading}
                             className="flex w-full items-center justify-center rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
                         >
                             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Login"}

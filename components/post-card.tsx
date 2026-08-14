@@ -15,6 +15,7 @@ import { PostMenu } from "./post/post-menu";
 import { ReactionDialog } from "./post/reaction-dialog";
 import { FormattedText } from "./ui/formatted-text";
 import { addHiddenPost, getHiddenPosts } from "./post/hidden-post-utils";
+import { toast } from "sonner";
 
 interface PostCardProps {
   post: Post;
