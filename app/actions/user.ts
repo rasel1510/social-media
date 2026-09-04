@@ -1,9 +1,10 @@
-"use server"; // Force rebuild after client regeneration
+"use server";
 
 import prisma from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { userCache, userTrie, CacheManager } from "@/lib/cache-manager";
 
 export async function updateProfile(data: {
   bio?: string;
@@ -38,12 +39,20 @@ export async function updateProfile(data: {
     },
   });
 
+  // Invalidate cache and update Trie
+  CacheManager.invalidateUser(userId);
+  CacheManager.indexUser(updatedUser);
+
   revalidatePath(`/profile/${updatedUser.username || updatedUser.id}`);
   revalidatePath("/");
 
   return { success: true, user: updatedUser };
 }
 
+/**
+ * High-Speed Trie Prefix User Search for @mentions and Autocomplete
+ * Achieves O(L) time complexity instead of O(N) database scans.
+ */
 export async function searchMentionUsers(query: string) {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -51,19 +60,31 @@ export async function searchMentionUsers(query: string) {
 
   if (!session?.user) return [];
 
+  const currentUserId = session.user.id;
+  const cleanQuery = query.trim().toLowerCase();
+
+  // 1. Check Trie memory index first (O(L))
+  if (cleanQuery) {
+    const trieMatches = userTrie.findByPrefix(cleanQuery, 5);
+    const filteredMatches = trieMatches.filter((u) => u.id !== currentUserId);
+    if (filteredMatches.length >= 3) {
+      return filteredMatches;
+    }
+  }
+
+  // 2. Query database with indexed B-Tree search
   const whereClause: any = {
-    id: { not: session.user.id }, // Exclude yourself
+    id: { not: currentUserId },
   };
 
-  // If there's a query, filter by name or username
-  if (query && query.length >= 1) {
+  if (cleanQuery && cleanQuery.length >= 1) {
     whereClause.OR = [
-      { name: { contains: query, mode: "insensitive" } },
-      { username: { contains: query, mode: "insensitive" } },
+      { name: { contains: cleanQuery, mode: "insensitive" } },
+      { username: { contains: cleanQuery, mode: "insensitive" } },
     ];
   }
 
-  const users = await (prisma as any).user.findMany({
+  const users = await prisma.user.findMany({
     where: whereClause,
     select: {
       id: true,
@@ -74,6 +95,11 @@ export async function searchMentionUsers(query: string) {
     take: 5,
     orderBy: { name: "asc" },
   });
+
+  // Cache in Trie for instant subsequent searches
+  for (const user of users) {
+    CacheManager.indexUser(user);
+  }
 
   return users;
 }

@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { friendStatusCache, socialGraph, CacheManager } from "@/lib/cache-manager";
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -14,12 +15,19 @@ async function getSession() {
 
 export type FriendStatus = "NONE" | "PENDING_SENT" | "PENDING_RECEIVED" | "FRIENDS" | "SELF";
 
+/**
+ * Checks friendship status with O(1) LRU caching and indexed DB fallback
+ */
 export async function getFriendStatus(targetUserId: string): Promise<FriendStatus> {
   const session = await getSession();
   if (!session) return "NONE";
 
   const currentUserId = session.user.id;
   if (currentUserId === targetUserId) return "SELF";
+
+  const cacheKey = `friend:${currentUserId}:${targetUserId}`;
+  const cachedStatus = friendStatusCache.get(cacheKey) as FriendStatus | undefined;
+  if (cachedStatus) return cachedStatus;
 
   // Check if they are already friends
   const friendship = await prisma.friendship.findFirst({
@@ -29,9 +37,14 @@ export async function getFriendStatus(targetUserId: string): Promise<FriendStatu
         { userId1: targetUserId, userId2: currentUserId },
       ],
     },
+    select: { id: true },
   });
 
-  if (friendship) return "FRIENDS";
+  if (friendship) {
+    friendStatusCache.set(cacheKey, "FRIENDS", 60000);
+    socialGraph.addFriendship(currentUserId, targetUserId);
+    return "FRIENDS";
+  }
 
   // Check if there's a pending request sent by the current user
   const sentRequest = await prisma.friendRequest.findFirst({
@@ -40,9 +53,13 @@ export async function getFriendStatus(targetUserId: string): Promise<FriendStatu
       receiverId: targetUserId,
       status: "PENDING",
     },
+    select: { id: true },
   });
 
-  if (sentRequest) return "PENDING_SENT";
+  if (sentRequest) {
+    friendStatusCache.set(cacheKey, "PENDING_SENT", 30000);
+    return "PENDING_SENT";
+  }
 
   // Check if there's a pending request received by the current user
   const receivedRequest = await prisma.friendRequest.findFirst({
@@ -51,10 +68,15 @@ export async function getFriendStatus(targetUserId: string): Promise<FriendStatu
       receiverId: currentUserId,
       status: "PENDING",
     },
+    select: { id: true },
   });
 
-  if (receivedRequest) return "PENDING_RECEIVED";
+  if (receivedRequest) {
+    friendStatusCache.set(cacheKey, "PENDING_RECEIVED", 30000);
+    return "PENDING_RECEIVED";
+  }
 
+  friendStatusCache.set(cacheKey, "NONE", 30000);
   return "NONE";
 }
 
@@ -69,13 +91,13 @@ export async function sendFriendRequest(receiverId: string) {
     const status = await getFriendStatus(receiverId);
     if (status !== "NONE") return { success: false, error: "Action not allowed" };
 
-    // Clear any existing rejected/non-pending request between these users in this direction
+    // Clear any existing rejected/non-pending request between these users
     await prisma.friendRequest.deleteMany({
       where: {
         senderId,
         receiverId,
-        status: { not: "PENDING" }
-      }
+        status: { not: "PENDING" },
+      },
     });
 
     await prisma.friendRequest.create({
@@ -94,6 +116,9 @@ export async function sendFriendRequest(receiverId: string) {
         type: "FRIEND_REQUEST",
       },
     });
+
+    CacheManager.invalidateFriendStatus(senderId, receiverId);
+    CacheManager.invalidateCounts(receiverId);
 
     revalidatePath(`/Profile/${receiverId}`);
     revalidatePath(`/explore`);
@@ -118,11 +143,12 @@ export async function acceptFriendRequest(senderId: string) {
         receiverId,
         status: "PENDING",
       },
+      select: { id: true },
     });
 
     if (!request) throw new Error("Request not found");
 
-    // Start a transaction: Update request status and create Friendship
+    // Atomic transaction: Update request status and create Friendship
     await prisma.$transaction([
       prisma.friendRequest.update({
         where: { id: request.id },
@@ -134,7 +160,6 @@ export async function acceptFriendRequest(senderId: string) {
           userId2: receiverId,
         },
       }),
-      // Delete the friend request notification if it exists
       prisma.notification.deleteMany({
         where: {
           userId: receiverId,
@@ -143,6 +168,11 @@ export async function acceptFriendRequest(senderId: string) {
         },
       }),
     ]);
+
+    // Update in-memory Graph and invalidate cache
+    socialGraph.addFriendship(senderId, receiverId);
+    CacheManager.invalidateFriendStatus(senderId, receiverId);
+    CacheManager.invalidateCounts(receiverId);
 
     revalidatePath(`/Profile/${senderId}`);
     revalidatePath(`/explore`);
@@ -166,6 +196,7 @@ export async function rejectFriendRequest(senderId: string) {
         receiverId,
         status: "PENDING",
       },
+      select: { id: true },
     });
 
     if (!request) return { success: true };
@@ -183,6 +214,9 @@ export async function rejectFriendRequest(senderId: string) {
         },
       }),
     ]);
+
+    CacheManager.invalidateFriendStatus(senderId, receiverId);
+    CacheManager.invalidateCounts(receiverId);
 
     revalidatePath(`/Profile/${senderId}`);
     revalidatePath(`/explore`);
@@ -206,6 +240,7 @@ export async function cancelFriendRequest(receiverId: string) {
         receiverId,
         status: "PENDING",
       },
+      select: { id: true },
     });
 
     if (request) {
@@ -222,6 +257,9 @@ export async function cancelFriendRequest(receiverId: string) {
         }),
       ]);
     }
+
+    CacheManager.invalidateFriendStatus(senderId, receiverId);
+    CacheManager.invalidateCounts(receiverId);
 
     revalidatePath(`/Profile/${receiverId}`);
     revalidatePath(`/explore`);
@@ -246,23 +284,25 @@ export async function removeFriend(friendId: string) {
           { userId1: friendId, userId2: currentUserId },
         ],
       },
+      select: { id: true },
     });
 
     if (friendship) {
       await prisma.friendship.delete({
         where: { id: friendship.id },
       });
-      
-      // Also delete the accepted request to keep data clean
+
       await prisma.friendRequest.deleteMany({
         where: {
           OR: [
-             { senderId: currentUserId, receiverId: friendId },
-             { senderId: friendId, receiverId: currentUserId }
-          ]
-        }
+            { senderId: currentUserId, receiverId: friendId },
+            { senderId: friendId, receiverId: currentUserId },
+          ],
+        },
       });
     }
+
+    CacheManager.invalidateFriendStatus(currentUserId, friendId);
 
     revalidatePath(`/Profile/${friendId}`);
     revalidatePath(`/explore`);
@@ -273,6 +313,12 @@ export async function removeFriend(friendId: string) {
   }
 }
 
+/**
+ * Advanced Social Graph & Jaccard Similarity Friend Recommendation Algorithm
+ * 1. Evaluates 2nd-degree connections (Friends-of-Friends) in O(|V| + |E|).
+ * 2. Computes mutual friend count & Jaccard index.
+ * 3. Falls back to recent active users if graph density is low.
+ */
 export async function getSuggestedFriends() {
   try {
     const session = await getSession();
@@ -280,51 +326,82 @@ export async function getSuggestedFriends() {
 
     const currentUserId = session.user.id;
 
-    // Get IDs of all current friends
-    const friendships = await prisma.friendship.findMany({
-      where: {
-        OR: [
-          { userId1: currentUserId },
-          { userId2: currentUserId },
-        ],
-      },
-    });
+    // Parallel fetch: friendships and pending requests
+    const [friendships, requests] = await Promise.all([
+      prisma.friendship.findMany({
+        where: {
+          OR: [{ userId1: currentUserId }, { userId2: currentUserId }],
+        },
+        select: { userId1: true, userId2: true },
+      }),
+      prisma.friendRequest.findMany({
+        where: {
+          OR: [{ senderId: currentUserId }, { receiverId: currentUserId }],
+          status: "PENDING",
+        },
+        select: { senderId: true, receiverId: true },
+      }),
+    ]);
 
-    const friendIds = friendships.flatMap((f: { userId1: string; userId2: string }) => 
-      f.userId1 === currentUserId ? [f.userId2] : [f.userId1]
+    const friendIds = new Set(
+      friendships.map((f) => (f.userId1 === currentUserId ? f.userId2 : f.userId1))
     );
 
-    // Get IDs of people we've sent requests to or received from
-    const requests = await prisma.friendRequest.findMany({
-      where: {
-        OR: [
-          { senderId: currentUserId },
-          { receiverId: currentUserId },
-        ],
-        status: "PENDING",
-      },
-    });
-
-    const requestedIds = requests.flatMap((r: { senderId: string; receiverId: string }) => 
-      r.senderId === currentUserId ? [r.receiverId] : [r.senderId]
+    const requestedIds = new Set(
+      requests.map((r) => (r.senderId === currentUserId ? r.receiverId : r.senderId))
     );
 
-    const excludeIds = [currentUserId, ...friendIds, ...requestedIds];
+    const excludeSet = new Set<string>([currentUserId, ...friendIds, ...requestedIds]);
 
-    // Find users not in the exclude list
-    const suggestedUsers = await prisma.user.findMany({
-      where: {
-        id: { notIn: excludeIds },
-      },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        image: true,
-      },
-      take: 20, // Limit to 20 suggestions
-      orderBy: { createdAt: 'desc' }
-    });
+    // Build or sync social graph for current user's network
+    for (const f of friendships) {
+      socialGraph.addFriendship(f.userId1, f.userId2);
+    }
+
+    // Run FoF Recommendation Algorithm
+    const graphRecommendations = socialGraph.recommendFriends(currentUserId, excludeSet, 15);
+    const recommendedUserIds = graphRecommendations.map((r) => r.userId);
+
+    let suggestedUsers: any[] = [];
+
+    if (recommendedUserIds.length > 0) {
+      suggestedUsers = await prisma.user.findMany({
+        where: { id: { in: recommendedUserIds } },
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          image: true,
+        },
+      });
+    }
+
+    // If graph has fewer than 10 recommendations, backfill with newest users
+    if (suggestedUsers.length < 10) {
+      const remainingLimit = 20 - suggestedUsers.length;
+      const existingIds = new Set([...excludeSet, ...suggestedUsers.map((u) => u.id)]);
+
+      const backfillUsers = await prisma.user.findMany({
+        where: {
+          id: { notIn: Array.from(existingIds) },
+        },
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          image: true,
+        },
+        take: remainingLimit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      suggestedUsers = [...suggestedUsers, ...backfillUsers];
+    }
+
+    // Index users in Trie for instant mentions
+    for (const u of suggestedUsers) {
+      CacheManager.indexUser(u);
+    }
 
     return suggestedUsers;
   } catch (error) {
@@ -409,19 +486,16 @@ export async function getUserFriends(userId: string) {
   try {
     const friendships = await prisma.friendship.findMany({
       where: {
-        OR: [
-          { userId1: userId },
-          { userId2: userId },
-        ],
+        OR: [{ userId1: userId }, { userId2: userId }],
       },
       include: {
         user1: { select: { id: true, name: true, username: true, image: true } },
         user2: { select: { id: true, name: true, username: true, image: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
-    const friends = friendships.map((f) => 
+    const friends = friendships.map((f) =>
       f.userId1 === userId ? f.user2 : f.user1
     );
 

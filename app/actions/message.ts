@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { adminDb } from "@/lib/firebase-admin";
+import { CacheManager, countsCache } from "@/lib/cache-manager";
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -219,6 +220,10 @@ export async function sendMessage(conversationId: string, content: string, audio
 
     // Side effects: Firebase push and Revalidation — fire and forget
     // These run in the background so the response returns immediately
+    const otherUserId = conversation.user1Id === currentUserId ? conversation.user2Id : conversation.user1Id;
+    CacheManager.invalidateCounts(otherUserId);
+    CacheManager.invalidateCounts(currentUserId);
+
     adminDb.ref(`messages/${conversationId}/${message.id}`).set({
       ...message,
       createdAt: message.createdAt.toISOString(),
@@ -251,6 +256,7 @@ export async function markAsRead(conversationId: string) {
     });
     
     if (result.count > 0) {
+      CacheManager.invalidateCounts(currentUserId);
       revalidatePath(`/Messages`);
     }
     return { success: true };

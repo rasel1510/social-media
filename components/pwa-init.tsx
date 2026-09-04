@@ -6,12 +6,12 @@ export function PWAInit() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [visible, setVisible] = useState(false);
   const [showIOSSheet, setShowIOSSheet] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // Already dismissed by user before? Never show again.
-    if (localStorage.getItem("pwa-dismissed") === "true") return;
+    // Use sessionStorage so the card re-appears on every new browser session.
+    // (localStorage would hide it forever — bad UX if user dismissed by accident)
+    if (sessionStorage.getItem("pwa-dismissed") === "true") return;
 
     const ios =
       /iPad|iPhone|iPod/.test(navigator.userAgent) &&
@@ -19,11 +19,12 @@ export function PWAInit() {
     setIsIOS(ios);
 
     const standalone = window.matchMedia("(display-mode: standalone)").matches;
-    setIsStandalone(standalone);
 
-    if (!standalone) {
-      setVisible(true);
-    }
+    // Don't show if already installed / running as standalone
+    if (standalone) return;
+
+    // Show the card
+    setVisible(true);
 
     // Register service worker
     if ("serviceWorker" in navigator) {
@@ -38,41 +39,47 @@ export function PWAInit() {
       setDeferredPrompt(e);
     };
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", () => {
+    const handleInstalled = () => {
       setVisible(false);
       setDeferredPrompt(null);
-    });
+      sessionStorage.setItem("pwa-dismissed", "true");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
     };
   }, []);
 
   const handleDismiss = () => {
-    localStorage.setItem("pwa-dismissed", "true");
+    sessionStorage.setItem("pwa-dismissed", "true");
     setVisible(false);
   };
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
+      // Android / Chrome — trigger native install prompt
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === "accepted") {
         setVisible(false);
         setDeferredPrompt(null);
-        localStorage.setItem("pwa-dismissed", "true");
+        sessionStorage.setItem("pwa-dismissed", "true");
       }
     } else if (isIOS) {
+      // iOS Safari — show manual instructions sheet
       setShowIOSSheet(true);
     }
   };
 
-  if (isStandalone || !visible) return null;
+  if (!visible) return null;
 
   return (
     <>
-      {/* ── Bottom-right install card ────────────────────────────── */}
+      {/* ── Bottom-right install card ─────────────────────────── */}
       <div
         id="pwa-install-card"
         role="dialog"
@@ -84,7 +91,8 @@ export function PWAInit() {
           right: 24,
           zIndex: 9990,
           width: 320,
-          background: "linear-gradient(160deg, #0f0f1c 0%, #1c1040 60%, #0d0d1c 100%)",
+          background:
+            "linear-gradient(160deg, #0f0f1c 0%, #1c1040 60%, #0d0d1c 100%)",
           border: "1px solid rgba(139,92,246,0.4)",
           borderRadius: 20,
           padding: "22px 22px 20px",
@@ -93,7 +101,7 @@ export function PWAInit() {
           animation: "pwaSlideUp 0.35s cubic-bezier(0.34,1.4,0.64,1)",
         }}
       >
-        {/* ── Cross / dismiss button ───────────────── */}
+        {/* ── ✕ Dismiss button ─────────────────────── */}
         <button
           id="pwa-dismiss-btn"
           onClick={handleDismiss}
@@ -108,7 +116,7 @@ export function PWAInit() {
             background: "rgba(255,255,255,0.07)",
             border: "1px solid rgba(255,255,255,0.12)",
             color: "rgba(255,255,255,0.5)",
-            fontSize: 14,
+            fontSize: 15,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -118,26 +126,38 @@ export function PWAInit() {
             transition: "background 0.15s, color 0.15s",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.14)";
+            (e.currentTarget as HTMLButtonElement).style.background =
+              "rgba(255,255,255,0.14)";
             (e.currentTarget as HTMLButtonElement).style.color = "#fff";
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.07)";
-            (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.5)";
+            (e.currentTarget as HTMLButtonElement).style.background =
+              "rgba(255,255,255,0.07)";
+            (e.currentTarget as HTMLButtonElement).style.color =
+              "rgba(255,255,255,0.5)";
           }}
         >
           ✕
         </button>
 
-        {/* ── Icon + title row ─────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+        {/* ── Icon + title ─────────────────────────── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            marginBottom: 14,
+          }}
+        >
           <div style={{ position: "relative", flexShrink: 0 }}>
+            {/* Glow behind icon */}
             <div
               style={{
                 position: "absolute",
                 inset: -8,
                 borderRadius: "50%",
-                background: "radial-gradient(circle, rgba(124,58,237,0.45) 0%, transparent 70%)",
+                background:
+                  "radial-gradient(circle, rgba(124,58,237,0.45) 0%, transparent 70%)",
                 filter: "blur(8px)",
               }}
             />
@@ -156,17 +176,34 @@ export function PWAInit() {
           </div>
 
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: "-0.2px" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#fff",
+                letterSpacing: "-0.2px",
+              }}
+            >
               Install App
             </p>
-            <p style={{ margin: "3px 0 0", fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.4 }}>
+            <p
+              style={{
+                margin: "3px 0 0",
+                fontSize: 12,
+                color: "rgba(255,255,255,0.45)",
+                lineHeight: 1.4,
+              }}
+            >
               Add to home screen for a native experience
             </p>
           </div>
         </div>
 
         {/* ── Feature pills ────────────────────────── */}
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 18 }}>
+        <div
+          style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 18 }}
+        >
           {["⚡ Faster", "📴 Offline", "🔔 Notifications"].map((f) => (
             <span
               key={f}
@@ -185,7 +222,7 @@ export function PWAInit() {
           ))}
         </div>
 
-        {/* ── CTA button ───────────────────────────── */}
+        {/* ── Install button ───────────────────────── */}
         <button
           id="pwa-install-btn"
           onClick={handleInstallClick}
@@ -205,18 +242,20 @@ export function PWAInit() {
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
-            (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "translateY(-1px)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.opacity = "1";
-            (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "translateY(0)";
           }}
         >
           Install
         </button>
       </div>
 
-      {/* ── iOS instructions bottom sheet ───────────────────────── */}
+      {/* ── iOS instructions bottom sheet ────────────────────── */}
       {showIOSSheet && (
         <>
           <div
@@ -248,25 +287,112 @@ export function PWAInit() {
               animation: "pwaSheetUp 0.28s cubic-bezier(0.34,1.3,0.64,1)",
             }}
           >
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.2)", margin: "0 auto 24px" }} />
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                background: "rgba(255,255,255,0.2)",
+                margin: "0 auto 24px",
+              }}
+            />
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 20,
+              }}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/icon-192x192.png" alt="" style={{ width: 44, height: 44, borderRadius: 10 }} />
+              <img
+                src="/icon-192x192.png"
+                alt=""
+                style={{ width: 44, height: 44, borderRadius: 10 }}
+              />
               <div>
-                <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>Install App</p>
-                <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Add to your iOS home screen</p>
+                <p
+                  style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}
+                >
+                  Install App
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.45)",
+                  }}
+                >
+                  Add to your iOS home screen
+                </p>
               </div>
             </div>
 
-            <ol style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <ol
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: "0 0 24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
               {[
-                <>Tap the <span style={{ background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.4)", borderRadius: 6, padding: "1px 7px", fontSize: 13, color: "#c4b5fd" }}>⎋ Share</span> button in Safari</>,
-                <>Scroll down and tap <strong style={{ color: "#a78bfa" }}>"Add to Home Screen"</strong></>,
-                <>Tap <strong style={{ color: "#a78bfa" }}>Add</strong> to confirm</>,
+                <>
+                  Tap the{" "}
+                  <span
+                    style={{
+                      background: "rgba(139,92,246,0.2)",
+                      border: "1px solid rgba(139,92,246,0.4)",
+                      borderRadius: 6,
+                      padding: "1px 7px",
+                      fontSize: 13,
+                      color: "#c4b5fd",
+                    }}
+                  >
+                    ⎋ Share
+                  </span>{" "}
+                  button in Safari
+                </>,
+                <>
+                  Scroll down and tap{" "}
+                  <strong style={{ color: "#a78bfa" }}>
+                    "Add to Home Screen"
+                  </strong>
+                </>,
+                <>
+                  Tap <strong style={{ color: "#a78bfa" }}>Add</strong> to
+                  confirm
+                </>,
               ].map((step, i) => (
-                <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, color: "rgba(255,255,255,0.7)", fontSize: 14 }}>
-                  <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg, #7c3aed, #4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", marginTop: 1 }}>
+                <li
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    color: "rgba(255,255,255,0.7)",
+                    fontSize: 14,
+                  }}
+                >
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#fff",
+                      marginTop: 1,
+                    }}
+                  >
                     {i + 1}
                   </span>
                   <span style={{ paddingTop: 2 }}>{step}</span>
@@ -277,7 +403,18 @@ export function PWAInit() {
             <button
               id="pwa-ios-got-it"
               onClick={() => setShowIOSSheet(false)}
-              style={{ width: "100%", background: "linear-gradient(135deg, #7c3aed, #4f46e5)", border: "none", borderRadius: 14, color: "#fff", fontSize: 15, fontWeight: 700, padding: "14px", cursor: "pointer", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}
+              style={{
+                width: "100%",
+                background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                border: "none",
+                borderRadius: 14,
+                color: "#fff",
+                fontSize: 15,
+                fontWeight: 700,
+                padding: "14px",
+                cursor: "pointer",
+                boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+              }}
             >
               Got it
             </button>
@@ -298,6 +435,8 @@ export function PWAInit() {
           from { transform: translateY(100%); }
           to   { transform: translateY(0);    }
         }
+        #pwa-install-btn:active { transform: scale(0.97); }
+        #pwa-ios-got-it:hover   { opacity: 0.88; }
       `}</style>
     </>
   );

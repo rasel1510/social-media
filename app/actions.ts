@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { checkContentForBadWords, applyDemeritPoint } from "@/lib/moderation";
+import { CacheManager, userCache } from "@/lib/cache-manager";
 
 /**
  * Utility to verify session and get user ID
@@ -730,6 +731,7 @@ export async function markNotificationsAsRead() {
       data: { isRead: true },
     });
 
+    CacheManager.invalidateCounts(session.user.id);
     revalidatePath("/notifications");
     return { success: true };
   } catch (error) {
@@ -757,16 +759,24 @@ export async function getUnreadNotificationCount() {
 }
 
 /**
- * Checks if a user exists by email.
+ * Checks if a user exists by email with O(1) LRU caching.
  * Used to provide specific error messages during login.
  */
 export async function checkUserExists(email: string) {
   try {
+    const normalized = email.toLowerCase().trim();
+    const cacheKey = `user:exists:${normalized}`;
+    const cached = userCache.get(cacheKey);
+    if (typeof cached === "boolean") return cached;
+
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: normalized },
       select: { id: true },
     });
-    return !!user;
+
+    const exists = !!user;
+    userCache.set(cacheKey, exists, 30000); // 30s TTL
+    return exists;
   } catch (error) {
     console.error("Error checking user existence:", error);
     return false;

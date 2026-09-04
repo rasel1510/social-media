@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import prisma from "@/lib/db";
+import { countsCache } from "@/lib/cache-manager";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/counts
  * Returns unread message count + unread notification count in one round-trip.
- * Replaces the two separate server action calls the sidebar was making.
+ * Uses an O(1) in-memory LRU Cache with TTL to eliminate redundant DB round-trips for high-frequency polling.
  */
 export async function GET() {
   try {
@@ -18,34 +19,49 @@ export async function GET() {
     }
 
     const userId = session.user.id;
+    const cacheKey = `counts:${userId}`;
+    const cached = countsCache.get(cacheKey);
 
-    const [messages, notifications] = await Promise.all([
-      // Unread messages: conversations where the last message is not from this user
-      // and hasn't been read by this user
-      (prisma as any).message
-        ? (prisma as any).message.count({
-            where: {
-              receiverId: userId,
-              read: false,
-            },
-          })
-        : Promise.resolve(0),
+    if (cached) {
+      return NextResponse.json({
+        messages: cached.unreadMessages,
+        notifications: cached.unreadNotifications,
+      });
+    }
 
-      // Unread notifications
+    const [messagesCount, notificationsCount] = await Promise.all([
+      // Unread messages where recipient is current user and message is not read
+      prisma.message.count({
+        where: {
+          conversation: {
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
+          senderId: { not: userId },
+          isRead: false,
+        },
+      }),
+
+      // Unread notifications for this user
       (prisma as any).notification.count({
         where: {
           userId,
-          read: false,
+          isRead: false,
         },
       }),
     ]);
 
+    const result = {
+      unreadMessages: messagesCount,
+      unreadNotifications: notificationsCount,
+    };
+
+    countsCache.set(cacheKey, result, 10000); // 10s TTL
+
     return NextResponse.json(
-      { messages, notifications },
+      { messages: messagesCount, notifications: notificationsCount },
       {
         headers: {
-          // Very short cache — counts need to be fairly fresh
-          "Cache-Control": "private, max-age=0, must-revalidate",
+          "Cache-Control": "private, max-age=5, stale-while-revalidate=10",
         },
       }
     );
