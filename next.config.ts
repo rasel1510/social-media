@@ -1,21 +1,39 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // ── Gzip all responses
+  compress: true,
+
+  // ── Strip the X-Powered-By header (saves bytes + hides stack)
+  poweredByHeader: false,
+
   typescript: {
-    ignoreBuildErrors: true, // Also ignore TS errors to be safe, though we should fix critical ones
+    ignoreBuildErrors: true,
   },
+
+  // ── Image optimisation: auto WebP/AVIF, long CDN cache
   images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 2_592_000, // 30 days
+    deviceSizes: [360, 480, 640, 750, 828, 1080],
+    imageSizes: [32, 48, 64, 96, 128, 256],
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: '**',
+        protocol: "https",
+        hostname: "**",
       },
     ],
   },
+
+  // ── Tree-shake lucide-react so only used icons ship to client
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
+
   async headers() {
     return [
+      // Global security headers
       {
-        // Global security headers
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
@@ -23,22 +41,27 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
+      // Service worker — never cache so updates roll out immediately
       {
-        // Service worker — never cache so updates roll out immediately
         source: "/sw.js",
         headers: [
-          {
-            key: "Content-Type",
-            value: "application/javascript; charset=utf-8",
-          },
-          {
-            key: "Cache-Control",
-            value: "no-cache, no-store, must-revalidate",
-          },
-          {
-            key: "Service-Worker-Allowed",
-            value: "/",
-          },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      // PWA icons / static assets — immutable long-lived cache
+      {
+        source: "/icon-(.*).png",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      // Next.js static chunks — already hashed, safe to cache forever
+      {
+        source: "/_next/static/(.*)",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],
       },
     ];

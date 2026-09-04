@@ -3,19 +3,32 @@
 import { Loader2, MessageCircle, Share2, MapPin } from "lucide-react";
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { deletePost, updatePost } from "@/app/actions";
-import { CommentSection } from "./comment/CommentSection";
 import { Post } from "./feed";
 import { authClient } from "@/lib/auth-client";
 import { SharedPost } from "./post/shared-post";
-import { ShareDialog } from "./post/share-dialog";
 import { ReactionButton } from "./post/reaction-button";
 import { PostMenu } from "./post/post-menu";
-import { ReactionDialog } from "./post/reaction-dialog";
 import { FormattedText } from "./ui/formatted-text";
 import { addHiddenPost, getHiddenPosts } from "./post/hidden-post-utils";
 import { toast } from "sonner";
+
+// Heavy modals — loaded only when user triggers them
+const CommentSection = dynamic(
+  () => import("./comment/CommentSection").then((m) => m.CommentSection),
+  { ssr: false, loading: () => <div className="py-4 text-center text-sm text-zinc-500"><Loader2 className="inline h-4 w-4 animate-spin" /></div> }
+);
+const ShareDialog = dynamic(
+  () => import("./post/share-dialog").then((m) => m.ShareDialog),
+  { ssr: false }
+);
+const ReactionDialog = dynamic(
+  () => import("./post/reaction-dialog").then((m) => m.ReactionDialog),
+  { ssr: false }
+);
 
 interface PostCardProps {
   post: Post;
@@ -26,30 +39,38 @@ interface PostCardProps {
   initialShowShare?: boolean;
 }
 
-
-export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowComments = false, initialShowShare = false }: PostCardProps) {
+export function PostCard({
+  post,
+  isOwner,
+  currentUserId,
+  onDelete,
+  initialShowComments = false,
+  initialShowShare = false,
+}: PostCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(post.content || "");
   const [isPending, startTransition] = useTransition();
   const [showComments, setShowComments] = useState(initialShowComments);
-  const [commentCount, setCommentCount] = useState((post as any)._count?.comments || (post as any).comments?.length || 0);
-  const [shareCount, setShareCount] = useState((post as any)._count?.shares || (post as any).shares?.length || 0);
+  const [commentCount, setCommentCount] = useState(
+    (post as any)._count?.comments || (post as any).comments?.length || 0
+  );
+  const [shareCount, setShareCount] = useState(
+    (post as any)._count?.shares || (post as any).shares?.length || 0
+  );
   const [isShareModalOpen, setIsShareModalOpen] = useState(initialShowShare);
   const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (getHiddenPosts().includes(post.id)) {
-      setIsHidden(true);
-    }
+    if (getHiddenPosts().includes(post.id)) setIsHidden(true);
   }, [post.id]);
 
   const { data: session } = authClient.useSession();
   const rawUsername = post.author.username || post.authorId || "";
   const shortUsername = rawUsername.length > 3 ? rawUsername.substring(0, 3) : rawUsername;
   const name = post.author.name || "User";
-  const formattedHandle = `@${name.replace(/\s+/g, '')}${shortUsername}`;
+  const formattedHandle = `@${name.replace(/\s+/g, "")}${shortUsername}`;
   const initials = (post.author.name?.[0] || rawUsername[0] || "U").toUpperCase();
 
   const handleDelete = async () => {
@@ -98,10 +119,20 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
   return (
     <div className="border-b border-zinc-800 p-4 lg:p-5 transition hover:bg-zinc-950/50">
       <div className="flex gap-3">
-        {/* Avatar */}
-        <Link href={`/Profile/${post.author.username || post.authorId}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 font-bold text-emerald-400 uppercase hover:opacity-80 transition overflow-hidden">
+        {/* Avatar — Next.js Image: auto WebP/AVIF, lazy, sized */}
+        <Link
+          href={`/Profile/${post.author.username || post.authorId}`}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 font-bold text-emerald-400 uppercase hover:opacity-80 transition overflow-hidden"
+        >
           {post.author.image ? (
-            <img src={post.author.image} alt={name} className="h-full w-full object-cover" />
+            <Image
+              src={post.author.image}
+              alt={name}
+              width={44}
+              height={44}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
           ) : (
             initials
           )}
@@ -111,12 +142,13 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
           <div className="flex items-center justify-between relative">
             <div className="flex flex-col">
               <div className="flex items-center gap-1">
-                <Link href={`/Profile/${post.author.username || post.authorId}`} className="font-bold text-white hover:underline text-sm sm:text-base">
+                <Link
+                  href={`/Profile/${post.author.username || post.authorId}`}
+                  className="font-bold text-white hover:underline text-sm sm:text-base"
+                >
                   {name}
                 </Link>
-                <span className="text-zinc-500 text-xs">
-                  {formattedHandle}
-                </span>
+                <span className="text-zinc-500 text-xs">{formattedHandle}</span>
                 <span className="text-zinc-500 text-xs sm:text-sm">·</span>
                 <span className="text-zinc-500 text-xs sm:text-sm" suppressHydrationWarning>
                   {new Date(post.createdAt).toLocaleDateString()}
@@ -170,9 +202,18 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
             <FormattedText text={post.content} className="mt-1 text-white leading-normal" />
           )}
 
+          {/* Post image — Next.js Image with lazy loading */}
           {post.image && (
             <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-800">
-              <img src={post.image} alt="Post attachment" className="max-h-[512px] w-full object-cover" />
+              <Image
+                src={post.image}
+                alt="Post attachment"
+                width={600}
+                height={400}
+                className="w-full object-cover max-h-[512px]"
+                loading="lazy"
+                sizes="(max-width: 640px) 100vw, 600px"
+              />
             </div>
           )}
 
@@ -182,7 +223,7 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
             <div className="mt-4 flex items-center justify-between px-1">
               <div className="text-sm text-zinc-500 font-medium">
                 {post.reactions.length > 0 && (
-                  <button 
+                  <button
                     onClick={() => setIsReactionModalOpen(true)}
                     className="hover:underline hover:text-emerald-400 transition-colors"
                   >
@@ -191,7 +232,11 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
                 )}
               </div>
               <div className="flex gap-3 text-xs text-zinc-600 font-medium">
-                {commentCount > 0 && <button onClick={() => setShowComments(!showComments)} className="hover:underline">{commentCount} comments</button>}
+                {commentCount > 0 && (
+                  <button onClick={() => setShowComments(!showComments)} className="hover:underline">
+                    {commentCount} comments
+                  </button>
+                )}
                 {shareCount > 0 && <span>{shareCount} shares</span>}
               </div>
             </div>
@@ -230,6 +275,7 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
             </button>
           </div>
 
+          {/* Dynamically loaded heavy components */}
           {showComments && (
             <CommentSection
               postId={post.id}
@@ -241,7 +287,7 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
         </div>
       </div>
 
-      {session?.user && (
+      {session?.user && isShareModalOpen && (
         <ShareDialog
           isOpen={isShareModalOpen}
           onOpenChange={setIsShareModalOpen}
@@ -251,11 +297,13 @@ export function PostCard({ post, isOwner, currentUserId, onDelete, initialShowCo
         />
       )}
 
-      <ReactionDialog 
-        isOpen={isReactionModalOpen}
-        onOpenChange={setIsReactionModalOpen}
-        postId={post.id}
-      />
+      {isReactionModalOpen && (
+        <ReactionDialog
+          isOpen={isReactionModalOpen}
+          onOpenChange={setIsReactionModalOpen}
+          postId={post.id}
+        />
+      )}
     </div>
   );
 }

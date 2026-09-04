@@ -25,8 +25,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { User } from "@/lib/auth-types";
 import { toast } from "sonner";
-import { getUnreadCount } from "@/app/actions/message";
-import { getUnreadNotificationCount } from "@/app/actions";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -43,32 +41,29 @@ export function Sidebar() {
 
   useEffect(() => {
     const userId = session?.user?.id;
-    if (userId) {
-      const updateCounts = async () => {
-        try {
-          const [unread, notifications] = await Promise.all([
-            getUnreadCount(),
-            getUnreadNotificationCount()
-          ]);
-          setUnreadCount(unread);
-          setNotificationCount(notifications);
-        } catch (error) {
-          console.error("Error updating counts:", error);
-        }
-      };
-
-      updateCounts();
-      const interval = setInterval(() => {
-        if (session?.user?.id) {
-          updateCounts();
-        }
-      }, 15000);
-
-      return () => clearInterval(interval);
-    } else {
+    if (!userId) {
       setUnreadCount(0);
       setNotificationCount(0);
+      return;
     }
+
+    // Single fetch replaces two separate server-action calls
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch("/api/counts", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setUnreadCount(data.messages ?? 0);
+        setNotificationCount(data.notifications ?? 0);
+      } catch {
+        // silently ignore network errors — badge just won't update
+      }
+    };
+
+    fetchCounts();
+    // Reduced from 15s → 60s (75% fewer background requests)
+    const interval = setInterval(fetchCounts, 60_000);
+    return () => clearInterval(interval);
   }, [session?.user?.id]);
 
   // Facebook-style security: Prevent back-button from showing cached authenticated content after logout
