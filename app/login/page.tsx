@@ -99,8 +99,47 @@ function LoginContent() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
-            <div className="w-full max-w-md space-y-8">
+        <>
+            {/* Dark blurred backdrop */}
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 40,
+                    background: "rgba(0,0,0,0.75)",
+                    backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
+                }}
+            />
+
+            {/* Modal */}
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 50,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "24px 16px",
+                }}
+            >
+                <div
+                    style={{
+                        width: "100%",
+                        maxWidth: 420,
+                        animation: "loginSlideUp 0.3s cubic-bezier(0.34,1.2,0.64,1)",
+                    }}
+                >
+                    <style>{`
+                        @keyframes loginSlideUp {
+                            from { opacity: 0; transform: translateY(28px) scale(0.97); }
+                            to   { opacity: 1; transform: translateY(0)     scale(1);   }
+                        }
+                    `}</style>
+
+            {/* original inner content reused below */}
+            <div className="w-full space-y-8 text-white">
                 {/* Logo & Header */}
                 <div className="text-center">
 
@@ -232,7 +271,11 @@ function LoginContent() {
                     </Link>
                 </p>
             </div>
-        </div>
+        {/* close animation wrapper */}
+                </div>
+            {/* close modal flex container */}
+            </div>
+        </>
     );
 }
 
