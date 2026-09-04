@@ -4,8 +4,8 @@ import {
   getIncomingFriendRequests,
   getSentFriendRequests,
 } from "@/app/actions/friend";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
+import { redis } from "@/lib/redis";
 import { ExploreUserCard } from "./explore-user-card";
 import { FriendRequestCard } from "./friend-request-card";
 import { SentRequestCard } from "./sent-request-card";
@@ -19,9 +19,7 @@ import { redirect } from "next/navigation";
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 export default async function ExplorePage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
   
   if (!session) {
     redirect("/login?callbackURL=/explore");
@@ -37,40 +35,42 @@ export default async function ExplorePage({ searchParams }: { searchParams: Sear
   let feedPosts: any[] = [];
 
   if (tab === "people") {
-    // Fetch people data
+    // Fetch people data in parallel
     [suggestedUsers, incomingRequests, sentRequests] = await Promise.all([
       getSuggestedFriends(),
       getIncomingFriendRequests(),
       getSentFriendRequests(),
     ]);
   } else if (tab === "feed") {
-    // Fetch posts for feed
-    feedPosts = await prisma.post.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 50, // Limit to 50 for explore
-      include: {
-        author: {
-          select: {
-            name: true,
-            username: true,
-            image: true,
-          },
+    // Fetch posts with Redis cache
+    feedPosts = await redis.remember("feed:explore:50", 15, async () => {
+      return prisma.post.findMany({
+        orderBy: {
+          createdAt: "desc",
         },
-        reactions: true,
-        sharedPost: {
-          include: {
-            author: {
-              select: {
-                name: true,
-                username: true,
-                image: true,
+        take: 50,
+        include: {
+          author: {
+            select: {
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          reactions: true,
+          sharedPost: {
+            include: {
+              author: {
+                select: {
+                  name: true,
+                  username: true,
+                  image: true,
+                },
               },
             },
           },
         },
-      },
+      });
     });
   }
 

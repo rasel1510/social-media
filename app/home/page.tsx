@@ -1,40 +1,38 @@
 import { MainLayout } from "@/components/main-layout";
 import prisma from "@/lib/db";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
+import { redis } from "@/lib/redis";
 import { Feed, Post } from "@/components/feed";
 import { redirect } from "next/navigation";
-
-// Re-generate this page at most every 30 seconds (ISR)
-export const revalidate = 30;
 
 const INITIAL_LIMIT = 10;
 
 export default async function HomePage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");
   }
 
-  const posts: Post[] = await prisma.post.findMany({
-    take: INITIAL_LIMIT,
-    orderBy: { createdAt: "desc" },
-    include: {
-      author: {
-        select: { name: true, username: true, image: true },
-      },
-      reactions: true,
-      sharedPost: {
-        include: {
-          author: {
-            select: { name: true, username: true, image: true },
+  // Cache initial feed in Redis for 10 seconds for lightning fast page loads
+  const posts = await redis.remember<Post[]>("feed:home:initial:10", 10, async () => {
+    return prisma.post.findMany({
+      take: INITIAL_LIMIT,
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: {
+          select: { name: true, username: true, image: true },
+        },
+        reactions: true,
+        sharedPost: {
+          include: {
+            author: {
+              select: { name: true, username: true, image: true },
+            },
           },
         },
       },
-    },
+    });
   });
 
   return (

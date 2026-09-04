@@ -1,15 +1,12 @@
 import { MainLayout } from "@/components/main-layout";
 import { getConversations } from "@/app/actions/message";
 import { getUserFriends } from "@/app/actions/friend";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
 import { MessagesLayout } from "./messages-layout";
 import { redirect } from "next/navigation";
 
 export default async function MessagesPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");
@@ -17,7 +14,7 @@ export default async function MessagesPage() {
 
   const [conversations, friends] = await Promise.all([
     getConversations(),
-    getUserFriends(session.user.id)
+    getUserFriends(session.user.id),
   ]);
 
   return (

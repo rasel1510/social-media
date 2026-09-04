@@ -1,7 +1,6 @@
 import { UserFollowCard } from "./user-follow-card";
 import { getSuggestedUsersQuery } from "@/lib/follow-queries";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
 
 const trendingTopics = [
   { tag: "#React19", posts: "45.2K" },
@@ -11,9 +10,7 @@ const trendingTopics = [
 ];
 
 export async function RightSidebar() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
   const suggestedUsers = await getSuggestedUsersQuery(session?.user.id, 5);
 
   return (
@@ -60,5 +57,3 @@ export async function RightSidebar() {
     </aside>
   );
 }
-
-

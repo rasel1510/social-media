@@ -1,14 +1,11 @@
 import { MainLayout } from "@/components/main-layout";
 import { getNotifications } from "@/app/actions";
 import { NotificationList } from "@/components/notification-list";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 
 export default async function NotificationsPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login?callbackURL=/notifications");

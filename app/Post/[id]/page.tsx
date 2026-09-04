@@ -1,8 +1,8 @@
 import { MainLayout } from "@/components/main-layout";
 import { getPost } from "@/app/actions";
 import { PostCard } from "@/components/post-card";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
+import { redis } from "@/lib/redis";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -16,11 +16,11 @@ export default async function PostDetailPage({
 }) {
   const { id } = await params;
   const { action } = await searchParams;
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
-  const post = await getPost(id);
+  const post = await redis.remember(`post:detail:${id}`, 20, async () => {
+    return getPost(id);
+  });
 
   if (!post) {
     notFound();

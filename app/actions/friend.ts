@@ -2,15 +2,11 @@
 
 import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
 import { friendStatusCache, socialGraph, CacheManager } from "@/lib/cache-manager";
 
 async function getSession() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-  return session;
+  return getCurrentSession();
 }
 
 export type FriendStatus = "NONE" | "PENDING_SENT" | "PENDING_RECEIVED" | "FRIENDS" | "SELF";

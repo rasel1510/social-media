@@ -2,16 +2,12 @@
 
 import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getCurrentSession } from "@/lib/session";
 import { adminDb } from "@/lib/firebase-admin";
 import { CacheManager, countsCache } from "@/lib/cache-manager";
 
 async function getSession() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-  return session;
+  return getCurrentSession();
 }
 
 // 1. Get all conversations for the current user

@@ -2,20 +2,16 @@
 
 import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { checkContentForBadWords, applyDemeritPoint } from "@/lib/moderation";
 import { CacheManager, userCache } from "@/lib/cache-manager";
+import { getCurrentSession } from "@/lib/session";
+import { redis } from "@/lib/redis";
 
 /**
- * Utility to verify session and get user ID
+ * Utility to verify session and get user ID (memoized & cached)
  */
 async function getSession() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-  if (!session) return null;
-  return session;
+  return getCurrentSession();
 }
 
 /**
@@ -142,6 +138,7 @@ export async function createPost(content: string, image?: string, location?: str
     // Handle mentions in the background
     await handleMentions(content, post.id);
 
+    await redis.delByPattern("feed:*");
     revalidatePath("/");
     return { success: true, flagged, warning: warningMessage };
   } catch (error: any) {
@@ -170,6 +167,7 @@ export async function deletePost(postId: string) {
       where: { id: postId },
     });
 
+    await redis.delByPattern("feed:*");
     revalidatePath("/");
     return { success: true };
   } catch (error: any) {
@@ -639,6 +637,7 @@ export async function createShare(postId: string, content?: string) {
       });
     }
 
+    await redis.delByPattern("feed:*");
     revalidatePath("/");
     return { success: true, sharePost, flagged, warning: warningMessage };
   } catch (error: any) {
