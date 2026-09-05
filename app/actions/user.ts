@@ -51,9 +51,7 @@ export async function updateProfile(data: {
  * Achieves O(L) time complexity instead of O(N) database scans.
  */
 export async function searchMentionUsers(query: string) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session?.user) return [];
 

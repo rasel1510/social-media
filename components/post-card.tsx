@@ -122,6 +122,7 @@ export function PostCard({
         {/* Avatar — Next.js Image: auto WebP/AVIF, lazy, sized */}
         <Link
           href={`/Profile/${post.author.username || post.authorId}`}
+          prefetch={true}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 font-bold text-emerald-400 uppercase hover:opacity-80 transition overflow-hidden"
         >
           {post.author.image ? (
@@ -144,6 +145,7 @@ export function PostCard({
               <div className="flex items-center gap-1">
                 <Link
                   href={`/Profile/${post.author.username || post.authorId}`}
+                  prefetch={true}
                   className="font-bold text-white hover:underline text-sm sm:text-base"
                 >
                   {name}

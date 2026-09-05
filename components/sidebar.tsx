@@ -122,6 +122,7 @@ export function Sidebar() {
         <nav className="space-y-1">
           <Link
             href="/home"
+            prefetch={true}
             className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/home" ? "text-emerald-400" : "text-white"}`}
           >
             <HomeIcon className="h-6 w-6" />
@@ -130,6 +131,7 @@ export function Sidebar() {
 
           <Link
             href="/explore"
+            prefetch={true}
             onClick={(e) => handleAuthRedirect(e, "/explore")}
             className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/explore" ? "text-emerald-400" : "text-white"}`}
           >
@@ -139,6 +141,7 @@ export function Sidebar() {
 
           <Link
             href="/notifications"
+            prefetch={true}
             onClick={(e) => handleAuthRedirect(e, "/notifications")}
             className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/notifications" ? "text-emerald-400" : "text-white"}`}
           >
@@ -155,6 +158,7 @@ export function Sidebar() {
 
           <Link
             href="/Messages"
+            prefetch={true}
             onClick={(e) => handleAuthRedirect(e, "/Messages")}
             className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/Messages" || pathname.startsWith("/Messages/") ? "text-emerald-400" : "text-white"}`}
           >
@@ -171,6 +175,7 @@ export function Sidebar() {
 
           <Link
             href={session ? `/Profile/${user?.username || session.user.id}` : "/Profile"}
+            prefetch={true}
             onClick={handleProfileRedirect}
             className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname.startsWith("/Profile") ? "text-emerald-400" : "text-white"}`}
           >
@@ -187,7 +192,7 @@ export function Sidebar() {
         </Link>
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto" suppressHydrationWarning>
         {(mounted && !isPending) && (
           session ? (
             <DropdownMenu>
