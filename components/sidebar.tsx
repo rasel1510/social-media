@@ -98,20 +98,6 @@ export function Sidebar() {
     }
   };
 
-  const handleAuthRedirect = (e: React.MouseEvent<HTMLAnchorElement>, target: string) => {
-    if (!session) {
-      e.preventDefault();
-      router.push(`/login?callbackURL=${target}`);
-    }
-  };
-
-  const handleProfileRedirect = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!session) {
-      e.preventDefault();
-      router.push("/login?callbackURL=/Profile");
-    }
-  };
-
   return (
     <aside className="hidden lg:col-span-3 lg:flex lg:flex-col lg:justify-between lg:border-r lg:border-zinc-800 lg:px-5 lg:py-5 h-full">
       <div>
@@ -132,7 +118,6 @@ export function Sidebar() {
           <Link
             href="/explore"
             prefetch={true}
-            onClick={(e) => handleAuthRedirect(e, "/explore")}
             className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/explore" ? "text-emerald-400" : "text-white"}`}
           >
             <CompassIcon className="h-6 w-6" />
@@ -142,7 +127,6 @@ export function Sidebar() {
           <Link
             href="/notifications"
             prefetch={true}
-            onClick={(e) => handleAuthRedirect(e, "/notifications")}
             className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/notifications" ? "text-emerald-400" : "text-white"}`}
           >
             <div className="flex items-center gap-3">
@@ -159,7 +143,6 @@ export function Sidebar() {
           <Link
             href="/Messages"
             prefetch={true}
-            onClick={(e) => handleAuthRedirect(e, "/Messages")}
             className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname === "/Messages" || pathname.startsWith("/Messages/") ? "text-emerald-400" : "text-white"}`}
           >
             <div className="flex items-center gap-3">
@@ -176,7 +159,6 @@ export function Sidebar() {
           <Link
             href={session ? `/Profile/${user?.username || session.user.id}` : "/Profile"}
             prefetch={true}
-            onClick={handleProfileRedirect}
             className={`flex w-full items-center gap-3 rounded-full px-4 py-3 text-left transition hover:bg-zinc-900 ${pathname.startsWith("/Profile") ? "text-emerald-400" : "text-white"}`}
           >
             <UserIcon className="h-6 w-6" />

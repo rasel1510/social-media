@@ -36,8 +36,6 @@ export default async function HomePage() {
   });
 
   return (
-    <MainLayout>
-      <Feed initialPosts={posts} currentUserId={session?.user.id} />
-    </MainLayout>
+    <Feed initialPosts={posts} currentUserId={session?.user.id} />
   );
 }

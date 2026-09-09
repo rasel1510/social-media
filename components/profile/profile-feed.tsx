@@ -17,12 +17,13 @@ interface ProfileFeedProps {
   type: "all" | "photos";
   currentUserId?: string;
   isOwnProfile: boolean;
+  initialPosts?: Post[];
 }
 
-export function ProfileFeed({ userId, type, currentUserId, isOwnProfile }: ProfileFeedProps) {
+export function ProfileFeed({ userId, type, currentUserId, isOwnProfile, initialPosts }: ProfileFeedProps) {
   const { data: session } = authClient.useSession();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [posts, setPosts] = useState<Post[]>(initialPosts || []);
+  const [isLoading, setIsLoading] = useState(!initialPosts);
   
   // Create Post state
   const [content, setContent] = useState("");
@@ -35,6 +36,10 @@ export function ProfileFeed({ userId, type, currentUserId, isOwnProfile }: Profi
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    // If initialPosts was provided for the current user, skip client-side fetch
+    if (initialPosts && initialPosts.length > 0 && posts.length > 0) {
+      return;
+    }
     const fetchPosts = async () => {
       setIsLoading(true);
       try {

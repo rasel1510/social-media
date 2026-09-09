@@ -18,14 +18,12 @@ export default async function MessagesPage() {
   ]);
 
   return (
-    <MainLayout>
-      <div className="h-full flex flex-col w-full bg-black -mt-[1px]">
-        <MessagesLayout 
-          initialConversations={conversations} 
-          currentUserId={session.user.id} 
-          friends={friends}
-        />
-      </div>
-    </MainLayout>
+    <div className="h-full flex flex-col w-full bg-black -mt-[1px]">
+      <MessagesLayout 
+        initialConversations={conversations} 
+        currentUserId={session.user.id} 
+        friends={friends}
+      />
+    </div>
   );
 }

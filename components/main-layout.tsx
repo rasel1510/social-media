@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import { Sidebar } from "./sidebar";
 import { RightSidebar } from "./right-sidebar";
+import { RightSidebarSkeleton } from "./right-sidebar-skeleton";
 import { MobileNav } from "./mobile-nav";
 
 interface MainLayoutProps {
@@ -18,8 +20,10 @@ export function MainLayout({ children }: MainLayoutProps) {
           {children}
         </div>
 
-        {/* Right Sidebar - Hidden on mobile/tablet */}
-        <RightSidebar />
+        {/* Right Sidebar - Progressive Suspense Streaming */}
+        <Suspense fallback={<RightSidebarSkeleton />}>
+          <RightSidebar />
+        </Suspense>
       </div>
 
       {/* Mobile Navigation */}

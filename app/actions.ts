@@ -37,22 +37,18 @@ async function handleMentions(content: string, postId?: string, commentId?: stri
       select: { id: true, username: true, name: true },
     });
 
-    // For mentions that didn't match a username, try matching by name (spaces removed)
+    // For mentions that didn't match a username, try matching by name
     const matchedUsernames = new Set(byUsername.map((u: any) => u.username));
     const unmatchedMentions = usernames.filter((u) => !matchedUsernames.has(u));
 
     let byName: any[] = [];
     if (unmatchedMentions.length > 0) {
-      // Get all users and filter by name match (spaces removed)
-      const allCandidates = await (prisma as any).user.findMany({
+      byName = await (prisma as any).user.findMany({
         where: {
-          username: null, // Only check users without a username
+          name: { in: unmatchedMentions },
         },
         select: { id: true, username: true, name: true },
       });
-      byName = allCandidates.filter((u: any) =>
-        unmatchedMentions.includes(u.name.replace(/\s+/g, ''))
-      );
     }
 
     const mentionedUsers = [...byUsername, ...byName];
@@ -138,8 +134,12 @@ export async function createPost(content: string, image?: string, location?: str
     // Handle mentions in the background
     await handleMentions(content, post.id);
 
-    await redis.delByPattern("feed:*");
-    revalidatePath("/");
+    await Promise.all([
+      redis.delByPattern("feed:*"),
+      redis.delByPattern(`profile:posts:${session.user.id}`),
+    ]);
+    revalidatePath("/home");
+    revalidatePath("/explore");
     return { success: true, flagged, warning: warningMessage };
   } catch (error: any) {
     console.error("Error in createPost:", error);
@@ -167,8 +167,13 @@ export async function deletePost(postId: string) {
       where: { id: postId },
     });
 
-    await redis.delByPattern("feed:*");
-    revalidatePath("/");
+    await Promise.all([
+      redis.delByPattern("feed:*"),
+      redis.delByPattern(`profile:posts:${session.user.id}`),
+      redis.del(`post:detail:${postId}`),
+    ]);
+    revalidatePath("/home");
+    revalidatePath("/explore");
     return { success: true };
   } catch (error: any) {
     console.error("Error in deletePost:", error);
@@ -292,7 +297,12 @@ export async function toggleReaction(postId: string, type: string = "LIKE") {
       }
     }
 
-    revalidatePath("/");
+    await Promise.all([
+      redis.delByPattern("feed:*"),
+      redis.del(`post:detail:${postId}`),
+    ]);
+    revalidatePath("/home");
+    revalidatePath("/explore");
     return { success: true };
   } catch (error: any) {
     console.error("Error in toggleReaction:", error);
@@ -465,7 +475,12 @@ export async function createComment(content: string, postId: string, parentId?: 
       }
     }
 
-    revalidatePath("/");
+    await Promise.all([
+      redis.del(`post:detail:${postId}`),
+      redis.delByPattern("feed:*"),
+    ]);
+    revalidatePath("/home");
+    revalidatePath(`/Post/${postId}`);
     return { success: true, comment };
   } catch (error: any) {
     console.error("Error in createComment:", error);
@@ -483,7 +498,7 @@ export async function updateComment(commentId: string, content: string) {
 
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
-      select: { authorId: true },
+      select: { authorId: true, postId: true },
     });
 
     if (!comment) throw new Error("Comment not found");
@@ -494,7 +509,12 @@ export async function updateComment(commentId: string, content: string) {
       data: { content: content.trim() },
     });
 
-    revalidatePath("/");
+    await Promise.all([
+      redis.del(`post:detail:${comment.postId}`),
+      redis.delByPattern("feed:*"),
+    ]);
+    revalidatePath("/home");
+    revalidatePath(`/Post/${comment.postId}`);
     return { success: true };
   } catch (error: any) {
     console.error("Error in updateComment:", error);
@@ -509,7 +529,7 @@ export async function deleteComment(commentId: string) {
 
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
-      select: { authorId: true },
+      select: { authorId: true, postId: true },
     });
 
     if (!comment) return { success: true };
@@ -524,7 +544,12 @@ export async function deleteComment(commentId: string) {
       where: { id: commentId },
     });
 
-    revalidatePath("/");
+    await Promise.all([
+      redis.del(`post:detail:${comment.postId}`),
+      redis.delByPattern("feed:*"),
+    ]);
+    revalidatePath("/home");
+    revalidatePath(`/Post/${comment.postId}`);
     return { success: true };
   } catch (error: any) {
     console.error("Error in deleteComment:", error);

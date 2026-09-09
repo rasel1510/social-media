@@ -11,11 +11,12 @@ interface ProfileTabsProps {
   user: any;
   isOwnProfile: boolean;
   currentUserId?: string;
+  initialPosts?: any[];
 }
 
 type TabType = "All" | "About" | "Photos";
 
-export function ProfileTabs({ user, isOwnProfile, currentUserId }: ProfileTabsProps) {
+export function ProfileTabs({ user, isOwnProfile, currentUserId, initialPosts }: ProfileTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("All");
   const router = useRouter();
 
@@ -65,13 +66,25 @@ export function ProfileTabs({ user, isOwnProfile, currentUserId }: ProfileTabsPr
 
       <div className="p-0">
         {activeTab === "All" && (
-          <ProfileFeed userId={user.id} type="all" currentUserId={currentUserId} isOwnProfile={isOwnProfile} />
+          <ProfileFeed 
+            userId={user.id} 
+            type="all" 
+            currentUserId={currentUserId} 
+            isOwnProfile={isOwnProfile} 
+            initialPosts={initialPosts}
+          />
         )}
         {activeTab === "About" && (
           <AboutTab user={user} isOwnProfile={isOwnProfile} />
         )}
         {activeTab === "Photos" && (
-          <ProfileFeed userId={user.id} type="photos" currentUserId={currentUserId} isOwnProfile={isOwnProfile} />
+          <ProfileFeed 
+            userId={user.id} 
+            type="photos" 
+            currentUserId={currentUserId} 
+            isOwnProfile={isOwnProfile} 
+            initialPosts={initialPosts}
+          />
         )}
       </div>
     </div>

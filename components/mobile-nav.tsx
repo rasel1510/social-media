@@ -22,13 +22,6 @@ export function MobileNav() {
     { name: "Messages", icon: Mail, href: "/Messages" },
   ];
 
-  const handleAuthRedirect = (e: React.MouseEvent, target: string) => {
-    if (!session && target !== "/home") {
-      e.preventDefault();
-      window.location.href = `/login?callbackURL=${target}`;
-    }
-  };
-
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-black lg:hidden">
       <div className="grid grid-cols-5 py-2">
@@ -40,7 +33,6 @@ export function MobileNav() {
               key={item.name}
               href={item.href}
               prefetch={true}
-              onClick={(e) => handleAuthRedirect(e, item.href)}
               className={`flex flex-col items-center gap-1 py-2 ${isActive ? "text-emerald-400" : "text-zinc-400"}`}
             >
               <Icon className={`h-5 w-5 ${isActive ? "fill-emerald-400/10" : ""}`} />

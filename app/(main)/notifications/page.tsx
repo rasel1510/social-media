@@ -14,10 +14,8 @@ export default async function NotificationsPage() {
   const notifications = await getNotifications();
 
   return (
-    <MainLayout>
-      <div className="flex flex-col min-h-screen border-r border-zinc-800">
-        <NotificationList initialNotifications={notifications} />
-      </div>
-    </MainLayout>
+    <div className="flex flex-col min-h-screen border-r border-zinc-800">
+      <NotificationList initialNotifications={notifications} />
+    </div>
   );
 }

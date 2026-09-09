@@ -1,4 +1,3 @@
-import { MainLayout } from "@/components/main-layout";
 import prisma from "@/lib/db";
 import { getCurrentSession } from "@/lib/session";
 import { redis } from "@/lib/redis";
@@ -7,6 +6,7 @@ import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileTabs } from "@/components/profile/profile-tabs";
 import { checkIsFollowing } from "@/app/actions/follow";
 import { getFriendStatus } from "@/app/actions/friend";
+import { getUserPosts } from "@/app/actions";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
   const { username } = await params;
@@ -49,10 +49,10 @@ export default async function ProfilePage({ params }: { params: { username: stri
       });
     }
 
-    // Fallback: match by name (spaces removed)
+    // Fallback: match by name using index
     if (!u) {
-      const candidates = await prisma.user.findMany({
-        where: { username: null },
+      u = await prisma.user.findFirst({
+        where: { name: { equals: username, mode: "insensitive" } },
         include: {
           _count: {
             select: {
@@ -65,7 +65,6 @@ export default async function ProfilePage({ params }: { params: { username: stri
           },
         },
       });
-      u = candidates.find((cand) => cand.name.replace(/\s+/g, "") === username) || null;
     }
 
     return u;
@@ -77,13 +76,14 @@ export default async function ProfilePage({ params }: { params: { username: stri
 
   const isOwnProfile = session?.user.id === user.id;
 
-  const [initialIsFollowing, friendStatus] = await Promise.all([
+  const [initialIsFollowing, friendStatus, initialPosts] = await Promise.all([
     !isOwnProfile && session ? checkIsFollowing(user.id) : Promise.resolve(false),
     !isOwnProfile && session ? getFriendStatus(user.id) : Promise.resolve("NONE" as const),
+    redis.remember(`profile:posts:${user.id}`, 20, () => getUserPosts(user.id)),
   ]);
 
   return (
-    <MainLayout>
+    <div className="flex flex-col min-h-screen bg-black">
       <ProfileHeader
         user={user}
         isOwnProfile={isOwnProfile}
@@ -91,7 +91,12 @@ export default async function ProfilePage({ params }: { params: { username: stri
         initialFriendStatus={friendStatus}
         currentUserId={session?.user.id}
       />
-      <ProfileTabs user={user} isOwnProfile={isOwnProfile} currentUserId={session?.user.id} />
-    </MainLayout>
+      <ProfileTabs 
+        user={user} 
+        isOwnProfile={isOwnProfile} 
+        currentUserId={session?.user.id} 
+        initialPosts={initialPosts as any}
+      />
+    </div>
   );
 }

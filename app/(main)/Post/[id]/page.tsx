@@ -31,28 +31,26 @@ export default async function PostDetailPage({
   const initialShowComments = action === "comment";
 
   return (
-    <MainLayout>
-      <div className="flex flex-col min-h-screen bg-black">
-        <div className="sticky top-0 z-10 flex items-center gap-6 border-b border-zinc-800 bg-black/80 px-4 py-3 backdrop-blur-md">
-          <Link 
-            href="/" 
-            className="rounded-full p-2 transition hover:bg-zinc-900 text-white"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <h1 className="text-xl font-bold text-white">Post</h1>
-        </div>
-
-        <div className="flex-1">
-          <PostCard 
-            post={post as any} 
-            isOwner={isOwner} 
-            currentUserId={session?.user.id}
-            initialShowShare={initialShowShare}
-            initialShowComments={initialShowComments}
-          />
-        </div>
+    <div className="flex flex-col min-h-screen bg-black">
+      <div className="sticky top-0 z-10 flex items-center gap-6 border-b border-zinc-800 bg-black/80 px-4 py-3 backdrop-blur-md">
+        <Link 
+          href="/home" 
+          className="rounded-full p-2 transition hover:bg-zinc-900 text-white"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <h1 className="text-xl font-bold text-white">Post</h1>
       </div>
-    </MainLayout>
+
+      <div className="flex-1">
+        <PostCard 
+          post={post as any} 
+          isOwner={isOwner} 
+          currentUserId={session?.user.id}
+          initialShowShare={initialShowShare}
+          initialShowComments={initialShowComments}
+        />
+      </div>
+    </div>
   );
 }
