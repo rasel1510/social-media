@@ -81,7 +81,7 @@ export function FriendRequestCard({ user, createdAt }: FriendRequestCardProps) {
           {name}
         </Link>
         <p className="text-sm text-zinc-500 line-clamp-1">{formattedHandle}</p>
-        <p className="text-xs text-zinc-600 mt-2">{timeAgo}</p>
+        <p className="text-xs text-zinc-600 mt-2" suppressHydrationWarning>{timeAgo}</p>
 
         {status === "accepted" ? (
           <div className="mt-4 w-full py-2.5 rounded-xl text-sm font-bold bg-emerald-500/10 text-emerald-400 flex items-center justify-center gap-2 border border-emerald-500/20">
@@ -137,5 +137,5 @@ function getTimeAgo(date: Date | string): string {
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
-  return dateObj.toLocaleDateString();
+  return dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }

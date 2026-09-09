@@ -35,11 +35,12 @@ export default async function ExplorePage({ searchParams }: { searchParams: Sear
   let feedPosts: any[] = [];
 
   if (tab === "people") {
-    // Fetch people data in parallel
+    const uid = session.user.id;
+    // Cache per-user people data in Redis for 30s — makes re-navigation instant
     [suggestedUsers, incomingRequests, sentRequests] = await Promise.all([
-      getSuggestedFriends(),
-      getIncomingFriendRequests(),
-      getSentFriendRequests(),
+      redis.remember(`explore:suggested:${uid}`, 30, () => getSuggestedFriends()),
+      redis.remember(`explore:incoming:${uid}`, 30, () => getIncomingFriendRequests()),
+      redis.remember(`explore:sent:${uid}`, 30, () => getSentFriendRequests()),
     ]);
   } else if (tab === "feed") {
     // Fetch posts with Redis cache

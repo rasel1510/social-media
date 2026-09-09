@@ -315,9 +315,9 @@ export function ProfileHeader({ user, isOwnProfile, initialIsFollowing = false, 
               {user.study}
             </div>
           )}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" suppressHydrationWarning>
             <Calendar className="h-4 w-4" />
-            Joined {new Date(user.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+            Joined {new Date(user.createdAt).toLocaleDateString("en-US", { month: 'long', year: 'numeric' })}
           </div>
         </div>
 

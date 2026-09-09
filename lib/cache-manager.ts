@@ -52,6 +52,21 @@ export const CacheManager = {
     friendStatusCache.delete(`friend:${user2}:${user1}`);
     friendStatusCache.invalidatePrefix(`suggested:${user1}`);
     friendStatusCache.invalidatePrefix(`suggested:${user2}`);
+    // Async cleanup of redis user:friends
+    import("./redis").then(({ redis }) => {
+      redis.del(`user:friends:${user1}`, `user:friends:${user2}`);
+    }).catch(() => {});
+  },
+
+  // Invalidate per-user explore cache (runs after friend request changes)
+  async invalidateExplore(userId: string) {
+    const { redis } = await import("./redis");
+    await Promise.all([
+      redis.del(`explore:suggested:${userId}`),
+      redis.del(`explore:incoming:${userId}`),
+      redis.del(`explore:sent:${userId}`),
+      redis.del(`user:friends:${userId}`),
+    ]);
   },
 
   // Index user in Trie

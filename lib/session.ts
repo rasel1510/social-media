@@ -18,8 +18,8 @@ export const getCurrentSession = cache(async () => {
     const reqHeaders = await headers();
     const cookieHeader = reqHeaders.get("cookie") || "";
     
-    // Extract better-auth session token from cookie if available
-    const sessionCookieMatch = cookieHeader.match(/better-auth\.session_token=([^;]+)/);
+    // Extract better-auth session token from cookie if available (matches both secure and standard prefixes)
+    const sessionCookieMatch = cookieHeader.match(/(?:__Secure-)?better-auth\.session_token=([^;]+)/);
     const sessionToken = sessionCookieMatch ? sessionCookieMatch[1] : null;
 
     if (sessionToken) {
@@ -34,8 +34,8 @@ export const getCurrentSession = cache(async () => {
       });
 
       if (session) {
-        // Cache session for 45 seconds
-        await redis.set(cacheKey, session, 45);
+        // Cache session for 90 seconds
+        await redis.set(cacheKey, session, 90);
       }
       return session;
     }
@@ -45,7 +45,10 @@ export const getCurrentSession = cache(async () => {
       headers: reqHeaders,
     });
     return session;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.digest === "DYNAMIC_SERVER_USAGE" || error?.message?.includes("Dynamic server usage")) {
+      throw error;
+    }
     console.error("[SessionCache] Failed to resolve session:", error);
     return null;
   }

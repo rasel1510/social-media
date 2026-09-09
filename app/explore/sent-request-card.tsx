@@ -66,7 +66,7 @@ export function SentRequestCard({ user, createdAt }: SentRequestCardProps) {
           {name}
         </Link>
         <p className="text-sm text-zinc-500 line-clamp-1">{formattedHandle}</p>
-        <p className="text-xs text-zinc-600 mt-2">Sent {timeAgo}</p>
+        <p className="text-xs text-zinc-600 mt-2" suppressHydrationWarning>Sent {timeAgo}</p>
 
         <div className="mt-4 w-full flex flex-col gap-2">
           <div className="w-full py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2 bg-zinc-800 text-amber-400 border border-amber-500/20">
@@ -105,5 +105,5 @@ function getTimeAgo(date: Date | string): string {
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
-  return dateObj.toLocaleDateString();
+  return dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }

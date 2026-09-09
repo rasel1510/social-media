@@ -689,28 +689,31 @@ export async function getNotifications() {
     const session = await getSession();
     if (!session) return [];
 
-    const notifications = await (prisma as any).notification.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      include: {
-        actor: {
-          select: {
-            name: true,
-            username: true,
-            image: true,
+    return redis.remember(`notifications:${session.user.id}`, 15, async () => {
+      const notifications = await (prisma as any).notification.findMany({
+        where: { userId: session.user.id },
+        take: 50,
+        orderBy: { createdAt: "desc" },
+        include: {
+          actor: {
+            select: {
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          post: {
+            select: {
+              id: true,
+              content: true,
+              image: true,
+            }
           },
         },
-        post: {
-          select: {
-            id: true,
-            content: true,
-            image: true,
-          }
-        },
-      },
-    });
+      });
 
-    return notifications;
+      return notifications;
+    });
   } catch (error) {
     console.error("Error in getNotifications:", error);
     return [];
@@ -731,6 +734,7 @@ export async function markNotificationsAsRead() {
     });
 
     CacheManager.invalidateCounts(session.user.id);
+    await redis.del(`notifications:${session.user.id}`);
     revalidatePath("/notifications");
     return { success: true };
   } catch (error) {

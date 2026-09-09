@@ -15,7 +15,7 @@ export default async function HomePage() {
   }
 
   // Cache initial feed in Redis for 10 seconds for lightning fast page loads
-  const posts = await redis.remember<Post[]>("feed:home:initial:10", 10, async () => {
+  const posts = await redis.remember<Post[]>("feed:home:initial:10", 30, async () => {
     return prisma.post.findMany({
       take: INITIAL_LIMIT,
       orderBy: { createdAt: "desc" },

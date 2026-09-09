@@ -11,6 +11,20 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
+  // ── Ultra-fast Client Router Cache & Bundle Optimization
+  experimental: {
+    staleTimes: {
+      dynamic: 30, // Keep dynamic pages in client router cache for 30 seconds
+      static: 300, // Keep prefetched / static pages for 5 minutes
+    },
+    optimizePackageImports: [
+      "lucide-react",
+      "date-fns",
+      "emoji-picker-react",
+      "sonner",
+    ],
+  },
+
   // ── Image optimisation: auto WebP/AVIF, long CDN cache
   images: {
     formats: ["image/avif", "image/webp"],
@@ -23,11 +37,6 @@ const nextConfig: NextConfig = {
         hostname: "**",
       },
     ],
-  },
-
-  // ── Tree-shake lucide-react so only used icons ship to client
-  experimental: {
-    optimizePackageImports: ["lucide-react"],
   },
 
   async headers() {
@@ -53,13 +62,6 @@ const nextConfig: NextConfig = {
       // PWA icons / static assets — immutable long-lived cache
       {
         source: "/icon-(.*).png",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
-      },
-      // Next.js static chunks — already hashed, safe to cache forever
-      {
-        source: "/_next/static/(.*)",
         headers: [
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/session";
 import { adminDb } from "@/lib/firebase-admin";
 import { CacheManager, countsCache } from "@/lib/cache-manager";
+import { redis } from "@/lib/redis";
 
 async function getSession() {
   return getCurrentSession();
@@ -18,30 +19,32 @@ export async function getConversations() {
 
     const currentUserId = session.user.id;
 
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
-      },
-      include: {
-        user1: { select: { id: true, name: true, username: true, image: true } },
-        user2: { select: { id: true, name: true, username: true, image: true } },
-        messages: {
-          where: { isRead: false, senderId: { not: currentUserId } },
-          select: { id: true },
+    return redis.remember(`conversations:${currentUserId}`, 15, async () => {
+      const conversations = await prisma.conversation.findMany({
+        where: {
+          OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
         },
-      },
-      orderBy: { lastMsgAt: "desc" },
-    });
+        include: {
+          user1: { select: { id: true, name: true, username: true, image: true } },
+          user2: { select: { id: true, name: true, username: true, image: true } },
+          messages: {
+            where: { isRead: false, senderId: { not: currentUserId } },
+            select: { id: true },
+          },
+        },
+        orderBy: { lastMsgAt: "desc" },
+      });
 
-    return conversations.map((conv) => {
-      const otherUser = conv.user1Id === currentUserId ? conv.user2 : conv.user1;
-      return {
-        id: conv.id,
-        user: otherUser,
-        lastMessage: conv.lastMessage,
-        lastMsgAt: conv.lastMsgAt,
-        unreadCount: conv.messages.length,
-      };
+      return conversations.map((conv) => {
+        const otherUser = conv.user1Id === currentUserId ? conv.user2 : conv.user1;
+        return {
+          id: conv.id,
+          user: otherUser,
+          lastMessage: conv.lastMessage,
+          lastMsgAt: conv.lastMsgAt,
+          unreadCount: conv.messages.length,
+        };
+      });
     });
   } catch (error) {
     console.error("Error fetching conversations:", error);
@@ -253,6 +256,7 @@ export async function markAsRead(conversationId: string) {
     
     if (result.count > 0) {
       CacheManager.invalidateCounts(currentUserId);
+      await redis.del(`conversations:${currentUserId}`);
       revalidatePath(`/Messages`);
     }
     return { success: true };

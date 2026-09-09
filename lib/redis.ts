@@ -15,6 +15,7 @@ interface CacheEntry<T = any> {
 
 class RedisStore {
   private store = new Map<string, CacheEntry>();
+  private inFlight = new Map<string, Promise<any>>();
   private maxItems: number;
 
   constructor(maxItems = 10000) {
@@ -25,6 +26,7 @@ class RedisStore {
       setInterval(() => this.cleanupExpired(), 60000).unref?.();
     }
   }
+
 
   private cleanupExpired(): void {
     const now = Date.now();
@@ -122,11 +124,26 @@ class RedisStore {
       return cached;
     }
 
-    const freshValue = await fetcher();
-    if (freshValue !== undefined && freshValue !== null) {
-      await this.set(key, freshValue, ttlSeconds);
+    // Return in-flight promise if another caller is already fetching this key
+    const ongoing = this.inFlight.get(key);
+    if (ongoing) {
+      return ongoing as Promise<T>;
     }
-    return freshValue;
+
+    const task = (async () => {
+      try {
+        const freshValue = await fetcher();
+        if (freshValue !== undefined && freshValue !== null) {
+          await this.set(key, freshValue, ttlSeconds);
+        }
+        return freshValue;
+      } finally {
+        this.inFlight.delete(key);
+      }
+    })();
+
+    this.inFlight.set(key, task);
+    return task;
   }
 
   /**

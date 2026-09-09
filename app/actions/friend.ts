@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/session";
 import { friendStatusCache, socialGraph, CacheManager } from "@/lib/cache-manager";
+import { redis } from "@/lib/redis";
 
 async function getSession() {
   return getCurrentSession();
@@ -115,6 +116,10 @@ export async function sendFriendRequest(receiverId: string) {
 
     CacheManager.invalidateFriendStatus(senderId, receiverId);
     CacheManager.invalidateCounts(receiverId);
+    await Promise.all([
+      CacheManager.invalidateExplore(senderId),
+      CacheManager.invalidateExplore(receiverId),
+    ]);
 
     revalidatePath(`/Profile/${receiverId}`);
     revalidatePath(`/explore`);
@@ -169,6 +174,10 @@ export async function acceptFriendRequest(senderId: string) {
     socialGraph.addFriendship(senderId, receiverId);
     CacheManager.invalidateFriendStatus(senderId, receiverId);
     CacheManager.invalidateCounts(receiverId);
+    await Promise.all([
+      CacheManager.invalidateExplore(senderId),
+      CacheManager.invalidateExplore(receiverId),
+    ]);
 
     revalidatePath(`/Profile/${senderId}`);
     revalidatePath(`/explore`);
@@ -213,6 +222,10 @@ export async function rejectFriendRequest(senderId: string) {
 
     CacheManager.invalidateFriendStatus(senderId, receiverId);
     CacheManager.invalidateCounts(receiverId);
+    await Promise.all([
+      CacheManager.invalidateExplore(senderId),
+      CacheManager.invalidateExplore(receiverId),
+    ]);
 
     revalidatePath(`/Profile/${senderId}`);
     revalidatePath(`/explore`);
@@ -256,6 +269,10 @@ export async function cancelFriendRequest(receiverId: string) {
 
     CacheManager.invalidateFriendStatus(senderId, receiverId);
     CacheManager.invalidateCounts(receiverId);
+    await Promise.all([
+      CacheManager.invalidateExplore(senderId),
+      CacheManager.invalidateExplore(receiverId),
+    ]);
 
     revalidatePath(`/Profile/${receiverId}`);
     revalidatePath(`/explore`);
@@ -480,22 +497,24 @@ export async function getSentFriendRequests() {
 
 export async function getUserFriends(userId: string) {
   try {
-    const friendships = await prisma.friendship.findMany({
-      where: {
-        OR: [{ userId1: userId }, { userId2: userId }],
-      },
-      include: {
-        user1: { select: { id: true, name: true, username: true, image: true } },
-        user2: { select: { id: true, name: true, username: true, image: true } },
-      },
-      orderBy: { createdAt: "desc" },
+    return redis.remember(`user:friends:${userId}`, 30, async () => {
+      const friendships = await prisma.friendship.findMany({
+        where: {
+          OR: [{ userId1: userId }, { userId2: userId }],
+        },
+        include: {
+          user1: { select: { id: true, name: true, username: true, image: true } },
+          user2: { select: { id: true, name: true, username: true, image: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const friends = friendships.map((f) =>
+        f.userId1 === userId ? f.user2 : f.user1
+      );
+
+      return friends;
     });
-
-    const friends = friendships.map((f) =>
-      f.userId1 === userId ? f.user2 : f.user1
-    );
-
-    return friends;
   } catch (error) {
     console.error("Error fetching friends:", error);
     return [];

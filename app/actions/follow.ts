@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { getSuggestedUsersQuery, getUserFollowersQuery, getUserFollowingQuery } from "@/lib/follow-queries";
+import { getCurrentSession } from "@/lib/session";
+import { redis } from "@/lib/redis";
 
 export async function followUser(targetUserId: string) {
   const session = await auth.api.getSession({
@@ -48,6 +50,8 @@ export async function followUser(targetUserId: string) {
   }
   revalidatePath(`/Profile/${session.user.id}`);
   
+  await redis.del(`follow:is:${session.user.id}:${targetUserId}`);
+  await redis.del(`follow:suggested:${session.user.id}:5`);
   return { success: true };
 }
 
@@ -92,24 +96,26 @@ export async function unfollowUser(targetUserId: string) {
   }
   revalidatePath(`/Profile/${session.user.id}`);
 
+  await redis.del(`follow:is:${session.user.id}:${targetUserId}`);
+  await redis.del(`follow:suggested:${session.user.id}:5`);
   return { success: true };
 }
 
 export async function checkIsFollowing(targetUserId: string) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
+  const session = await getCurrentSession();
   if (!session) return false;
 
-  const follow = await prisma.follow.findFirst({
-    where: {
-      followerId: session.user.id,
-      followingId: targetUserId,
-    },
-  });
+  return redis.remember(`follow:is:${session.user.id}:${targetUserId}`, 30, async () => {
+    const follow = await prisma.follow.findFirst({
+      where: {
+        followerId: session.user.id,
+        followingId: targetUserId,
+      },
+      select: { id: true },
+    });
 
-  return !!follow;
+    return !!follow;
+  });
 }
 
 
